@@ -1,0 +1,5 @@
+# 瑞士国际主义内文插图 3
+
+Create one polished editorial illustration for an X article, aspect ratio 5:3. Apply Swiss International Typographic Style through an off-white paper ground, a strict modular grid, black geometric forms, thin gray hairline rules, and exactly one ultramarine-blue accent. No text, no logos, no branding.
+
+Show a carefully measured path from abstract standard parameters to a finished document layout. At upper left, a small grid of black measurement ticks and circles acts as source parameters. A blue line passes through a clean central square and reaches a white A4 document sheet at lower right, where black text bars, heading blocks, margin markers, and one blue check align exactly. The scene should feel like a method turning rules into a usable page, with a quiet research-desk precision. Use a flat top-down editorial composition, paper texture, hairline geometry, limited blue, and abundant negative space. Avoid robots, dashboards, literal browser search screens, gradients, clutter, and unreadable text.
