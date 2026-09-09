@@ -56,6 +56,20 @@ https://github.com/mizzlelover/gongwen-gbt9704-skill
 
 https://std.samr.gov.cn/gb/search/gbDetailed?id=lOIe27f77QU%3D&mode=p
 
+## 作者与同名内容 IP
+
+这个项目由“谁是专家”持续维护。相关内容会记录 AI 工具、公文排版、正式材料和实际使用中的问题，欢迎从下面的入口找到我。
+
+- 小红书：[谁是专家](https://www.xiaohongshu.com/user/profile/64dd6c680000000001011d25)
+- X：[谁是专家](https://x.com/dboy_yi2025)
+- 微信公众号：微信搜一搜“谁是专家”
+
+![微信公众号“谁是专家”二维码](punk-assets/author/wechat-who-is-expert.png)
+
+## 关键词
+
+`公文排版` `GB/T 9704-2012` `DOCX` `Word` `WPS` `Claude Code` `OpenCode` `Kimi` `Trae Code` `TraeWork` `WorkBuddy` `ZCode` `AI Skill` `中文正式材料`
+
 ## 能力与边界
 
 | 场景 | 本项目的处理方式 |
