@@ -1,0 +1,19 @@
+scenario	profile	pdf_pages	committed_screenshot_examples
+command	command	2	references/assets/visual-audit/all-rules/command-1.png, references/assets/visual-audit/all-rules/command-2.png
+formal-attachments-detached	digital	4	references/assets/visual-audit/all-rules/formal-attachments-detached-3.png
+formal-attachments	digital	4	references/assets/visual-audit/all-rules/formal-attachments-3.png, references/assets/visual-audit/all-rules/formal-attachments-4.png
+formal-digital-all	digital	2	references/assets/visual-audit/all-rules/formal-digital-all-1.png, references/assets/visual-audit/all-rules/formal-digital-all-2.png
+formal-digital-upward	digital	2	references/assets/visual-audit/all-rules/formal-digital-upward-1.png, references/assets/visual-audit/all-rules/formal-digital-upward-2.png
+formal-joint	digital	2	references/assets/visual-audit/all-rules/formal-joint-1.png, references/assets/visual-audit/all-rules/formal-joint-2.png
+formal-long	digital	3	references/assets/visual-audit/all-rules/formal-long-2.png, references/assets/visual-audit/all-rules/formal-long-3.png
+formal-preprinted	digital	2	references/assets/visual-audit/all-rules/formal-preprinted-1.png, references/assets/visual-audit/all-rules/formal-preprinted-2.png
+formal-seal	digital	2	references/assets/visual-audit/all-rules/formal-seal-2.png
+formal-signed	digital	2	references/assets/visual-audit/all-rules/formal-signed-2.png
+formal-unsigned	digital	2	references/assets/visual-audit/all-rules/formal-unsigned-1.png, references/assets/visual-audit/all-rules/formal-unsigned-2.png
+horizontal-table	horizontal-table	1	references/assets/visual-audit/all-rules/horizontal-table-1.png
+letter-fields	letter	2	references/assets/visual-audit/all-rules/letter-fields-1.png
+letter	letter	1	references/assets/visual-audit/all-rules/letter-1.png
+minutes	digital	2	references/assets/visual-audit/all-rules/minutes-1.png, references/assets/visual-audit/all-rules/minutes-2.png
+ordinary-calibration	ordinary	2	references/assets/visual-audit/all-rules/ordinary-calibration-1.png
+ordinary	ordinary	1	references/assets/visual-audit/all-rules/ordinary-1.png
+table	ordinary	1	references/assets/visual-audit/all-rules/table-1.png

@@ -108,7 +108,7 @@ function reportFontStatus(args) {
 
 function usage() {
   console.log(`Usage:
-  node generate_gongwen_docx.mjs --input source.md --output out.docx [--format ordinary|formal|letter|command|minutes] [--letterhead preprinted|digital] [--org 发文机关] [--doc-no 发文字号] [--title 标题] [--subtitle 副标题] [--to 主送机关] [--sender 落款] [--date 日期] [--attachment-note 附件说明] [--attachment-file attachment.md ...] [--page-number center|standard|none] [--require-standard-fonts]
+  node generate_gongwen_docx.mjs --input source.md --output out.docx [--format ordinary|formal|letter|command|minutes|horizontal-table] [--letterhead preprinted|digital] [--org 发文机关] [--joint-org 联署机关 ...] [--doc-no 发文字号] [--title 标题] [--subtitle 副标题] [--to 主送机关] [--sender 落款] [--date 日期] [--attachment-note 附件说明] [--attachment-file attachment.md ...] [--attachment-detached] [--page-number center|standard|none] [--require-standard-fonts]
 
 Notes:
   - Converts Markdown to a GB/T 9704-2012 page-layout DOCX.
@@ -124,8 +124,8 @@ Notes:
 
 function parseArgs(argv) {
   const args = {};
-  const flags = new Set(["help", "no-page-number", "no-page-numbers", "require-standard-fonts"]);
-  const repeatable = new Set(["attachment-file"]);
+  const flags = new Set(["help", "no-page-number", "no-page-numbers", "require-standard-fonts", "attachment-detached"]);
+  const repeatable = new Set(["attachment-file", "joint-org"]);
   for (let i = 2; i < argv.length; i += 1) {
     const key = argv[i];
     if (!key.startsWith("--")) continue;
@@ -175,7 +175,8 @@ function run(text, opts = {}) {
   const size = opts.size ?? "32";
   const bold = opts.bold ? "<w:b/>" : "";
   const color = opts.color ?? "000000";
-  return `<w:r><w:rPr><w:rFonts ${fontAttrs(opts)}/>${bold}<w:color w:val="${color}"/><w:sz w:val="${size}"/><w:szCs w:val="${size}"/><w:lang w:val="en-US" w:eastAsia="zh-CN"/></w:rPr><w:t xml:space="preserve">${esc(text)}</w:t></w:r>`;
+  const textXml = String(text ?? "").split("\n").map((line, index) => `${index ? "<w:br/>" : ""}<w:t xml:space="preserve">${esc(line)}</w:t>`).join("");
+  return `<w:r><w:rPr><w:rFonts ${fontAttrs(opts)}/>${bold}<w:color w:val="${color}"/><w:sz w:val="${size}"/><w:szCs w:val="${size}"/><w:lang w:val="en-US" w:eastAsia="zh-CN"/></w:rPr>${textXml}</w:r>`;
 }
 
 function paragraph(text, opts = {}) {
@@ -223,19 +224,19 @@ function floatingHeaderFieldParagraph(text, fontPreset, index) {
   });
 }
 
-function floatingAgencyMarkParagraph(text) {
+function floatingAgencyMarkParagraph(text, lineCount = 1, size = "56") {
   return paragraph(text, {
     align: "center",
     indent: false,
     fontPreset: "title",
-    size: "56",
+    size,
     color: "FF0000",
     before: AGENCY_FRAME_BEFORE,
-    frame: { hAnchor: "margin", vAnchor: "margin", xAlign: "center", y: AGENCY_FRAME_Y, w: CONTENT_W, h: 800 },
+    frame: { hAnchor: "margin", vAnchor: "margin", xAlign: "center", y: AGENCY_FRAME_Y, w: CONTENT_W, h: 800 * Math.max(1, lineCount) },
   });
 }
 
-function agencyMarkFlowSpacer() {
+function agencyMarkFlowSpacer(extraDxa = 0) {
   return paragraph("\u00a0", {
     align: "left",
     indent: false,
@@ -243,7 +244,7 @@ function agencyMarkFlowSpacer() {
     size: "2",
     line: "560",
     snapToGrid: false,
-    before: AGENCY_FLOW_BEFORE,
+    before: AGENCY_FLOW_BEFORE + extraDxa,
     after: "0",
   });
 }
@@ -547,15 +548,15 @@ function blankGridLines(count = 2) {
   return Array.from({ length: count }, () => blankGridLine());
 }
 
-function tableXml(headers, rows) {
+function tableXml(headers, rows, width = CONTENT_W) {
   const colCount = headers.length;
-  const colWidth = Math.floor(CONTENT_W / colCount);
+  const colWidth = Math.floor(width / colCount);
   const grid = Array.from({ length: colCount }, () => `<w:gridCol w:w="${colWidth}"/>`).join("");
   const tr = (cells, header = false) => {
     const trPr = header ? "<w:trPr><w:tblHeader/></w:trPr>" : "";
     return `<w:tr>${trPr}${cells.map((cell) => tableCell(cell, colWidth, header)).join("")}</w:tr>`;
   };
-  return `<w:tbl><w:tblPr><w:tblW w:w="${CONTENT_W}" w:type="dxa"/><w:tblBorders><w:top w:val="single" w:sz="4" w:space="0" w:color="000000"/><w:left w:val="single" w:sz="4" w:space="0" w:color="000000"/><w:bottom w:val="single" w:sz="4" w:space="0" w:color="000000"/><w:right w:val="single" w:sz="4" w:space="0" w:color="000000"/><w:insideH w:val="single" w:sz="4" w:space="0" w:color="000000"/><w:insideV w:val="single" w:sz="4" w:space="0" w:color="000000"/></w:tblBorders><w:tblLook w:firstRow="1" w:lastRow="0" w:firstColumn="0" w:lastColumn="0" w:noHBand="0" w:noVBand="1"/></w:tblPr><w:tblGrid>${grid}</w:tblGrid>${tr(headers, true)}${rows.map((row) => tr(row)).join("")}</w:tbl>`;
+  return `<w:tbl><w:tblPr><w:tblW w:w="${width}" w:type="dxa"/><w:tblBorders><w:top w:val="single" w:sz="4" w:space="0" w:color="000000"/><w:left w:val="single" w:sz="4" w:space="0" w:color="000000"/><w:bottom w:val="single" w:sz="4" w:space="0" w:color="000000"/><w:right w:val="single" w:sz="4" w:space="0" w:color="000000"/><w:insideH w:val="single" w:sz="4" w:space="0" w:color="000000"/><w:insideV w:val="single" w:sz="4" w:space="0" w:color="000000"/></w:tblBorders><w:tblLook w:firstRow="1" w:lastRow="0" w:firstColumn="0" w:lastColumn="0" w:noHBand="0" w:noVBand="1"/></w:tblPr><w:tblGrid>${grid}</w:tblGrid>${tr(headers, true)}${rows.map((row) => tr(row)).join("")}</w:tbl>`;
 }
 
 function tableCell(text, width, header) {
@@ -715,14 +716,14 @@ function renderParagraph(block) {
   return paragraph(block.text);
 }
 
-function attachmentPage(blocks, index, filePath) {
+function attachmentPage(blocks, index, filePath, detachedDocNo = "") {
   const attachmentBlocks = [...blocks];
   let attachmentTitle = path.basename(filePath, path.extname(filePath));
   if (attachmentBlocks[0]?.type === "heading") {
     attachmentTitle = attachmentBlocks.shift().text;
   }
   const body = [
-    paragraph(`附件${index}`, { align: "left", indent: false, fontPreset: "h1", size: "32", pageBreakBefore: true, keepNext: true }),
+    paragraph(detachedDocNo ? `${detachedDocNo} 附件${index}` : `附件${index}`, { align: "left", indent: false, fontPreset: "h1", size: "32", pageBreakBefore: true, keepNext: true }),
     emptyLine(),
     titleParagraph(attachmentTitle),
   ];
@@ -738,18 +739,22 @@ function resolvePageNumberMode(args, format) {
   if (args["no-page-number"] || args["no-page-numbers"]) return "none";
   if (["center", "standard", "none"].includes(args["page-number"])) return args["page-number"];
   if (format === "letter") return "none";
-  if (format === "formal" || format === "command" || format === "minutes") return "standard";
+  if (format === "formal" || format === "command" || format === "minutes" || format === "horizontal-table") return "standard";
   return "center";
 }
 
 function buildDocument(blocks, args) {
   let title = args.title;
-  const format = ["ordinary", "formal", "letter", "command", "minutes"].includes(args.format) ? args.format : "ordinary";
+  const format = ["ordinary", "formal", "letter", "command", "minutes", "horizontal-table"].includes(args.format) ? args.format : "ordinary";
   const letterhead = args.letterhead === "digital" ? "digital" : "preprinted";
   const pageNumberMode = resolvePageNumberMode(args, format);
+  const horizontalTable = format === "horizontal-table" || args["horizontal-table"] === true || args["horizontal-table"] === "true";
+  const horizontalContentWidth = mmToDxa(225);
   const body = [];
   let titleGapLines = 0;
-  const pageMarginTop = format === "letter" ? 1701 : format === "command" ? 1134 : 2098;
+  // All formats keep the standard 37 mm top white margin. Special formats
+  // offset their marks inside the type area, measured from that boundary.
+  const pageMarginTop = format === "letter" ? 1701 : 2098;
   const sourceBlocks = [...blocks];
   if (!title && sourceBlocks[0]?.type === "heading") {
     title = sourceBlocks.shift().text;
@@ -779,7 +784,18 @@ function buildDocument(blocks, args) {
       // GB/T 9704-2012 7.2.4 fixes the agency mark at 35 mm below the
       // type-area top. Left-corner fields occupy their own column and must
       // not move the centered mark upward.
-      body.push(floatingAgencyMarkParagraph(args.org));
+      const jointOrganizations = Array.isArray(args["joint-org"]) ? args["joint-org"].map((name) => String(name).trim()).filter(Boolean) : [];
+      const agencyNames = [String(args.org).trim(), ...jointOrganizations];
+      // GB/T 9704-2012 7.2.4.2 keeps joint agency names on one centered
+      // mark row, with the host agency first. Full-width spaces preserve a
+      // visible separation without creating extra logo rows that would move
+      // the document number and title downward.
+      const host = String(args.org).trim();
+      const jointText = jointOrganizations.length && host.endsWith("文件")
+        ? [...[host.slice(0, -2), ...jointOrganizations], "文件"].join("　")
+        : agencyNames.join("　");
+      const agencyMarkSize = agencyNames.length > 1 ? (jointText.length > 16 ? "44" : "48") : "56";
+      body.push(floatingAgencyMarkParagraph(jointText, 1, agencyMarkSize));
       body.push(agencyMarkFlowSpacer());
       if (args["doc-no"]) body.push(...blankGridLines(2));
     }
@@ -819,7 +835,9 @@ function buildDocument(blocks, args) {
     if (!args.org) throw new Error("command format requires --org");
     if (!/(?:命令|令)$/.test(String(args.org).trim())) throw new Error("command --org must end with“命令”or“令”");
     if (!args["doc-no"]) throw new Error("command format requires --doc-no for the 令号");
-    body.push(paragraph(args.org, { align: "center", indent: false, fontPreset: "title", size: "44", color: "FF0000", before: "0", after: "0" }));
+    // GB/T 9704-2012 10.2 measures the command mark from the top edge of
+    // the type area, not from the paper edge: 37 mm + 20 mm from the page.
+    body.push(paragraph(args.org, { align: "center", indent: false, fontPreset: "title", size: "44", color: "FF0000", before: String(mmToDxa(20)), after: "0" }));
     if (args["doc-no"]) {
       body.push(...blankGridLines(2));
       body.push(paragraph(args["doc-no"], { align: "center", indent: false, fontPreset: "body", size: "32", after: "0" }));
@@ -845,7 +863,7 @@ function buildDocument(blocks, args) {
       continue;
     }
     if (block.type === "table") {
-      body.push(tableXml(block.headers, block.rows));
+      body.push(tableXml(block.headers, block.rows, horizontalTable ? horizontalContentWidth : CONTENT_W));
       body.push(emptyLine());
       continue;
     }
@@ -855,6 +873,13 @@ function buildDocument(blocks, args) {
     if (body.at(-1) === emptyLine()) body.pop();
     body.push(attachmentNote(args["attachment-note"]));
   }
+  // GB/T 9704-2012 10.3 places attendance information one line below the
+  // minutes body (or its attachment note), before any trailing signature or
+  // note material. Keeping it here also makes the screenshot evidence match
+  // the standard's “正文或附件说明下空一行” rule.
+  if (format === "minutes" && args.attendees) body.push(minutesPersonParagraph("出席", args.attendees, "560"));
+  if (format === "minutes" && args.absent) body.push(minutesPersonParagraph("请假", args.absent));
+  if (format === "minutes" && args.observers) body.push(minutesPersonParagraph("列席", args.observers));
   if (args.sender || args.date) {
     body.push(...(args["seal-mode"] === "signed" ? blankGridLines(2) : [emptyLine()]));
     body.push(...signatureParagraphs(args));
@@ -867,13 +892,11 @@ function buildDocument(blocks, args) {
     return absolutePath;
   });
   validateAttachmentConsistency(args["attachment-note"], absoluteAttachmentFiles);
+  if (args["attachment-detached"] && !args["doc-no"]) throw new Error("--attachment-detached requires --doc-no so the detached attachment can carry the document number");
   absoluteAttachmentFiles.forEach((absolutePath, index) => {
     const attachmentBlocks = parseMarkdown(fs.readFileSync(absolutePath, "utf8"));
-    body.push(attachmentPage(attachmentBlocks, index + 1, absolutePath));
+    body.push(attachmentPage(attachmentBlocks, index + 1, absolutePath, args["attachment-detached"] ? args["doc-no"] : ""));
   });
-  if (format === "minutes" && args.attendees) body.push(minutesPersonParagraph("出席", args.attendees, "560"));
-  if (format === "minutes" && args.absent) body.push(minutesPersonParagraph("请假", args.absent));
-  if (format === "minutes" && args.observers) body.push(minutesPersonParagraph("列席", args.observers));
   if (format !== "letter") body.push(...colophon(args));
   const letterFooter = format === "letter" ? '<w:footerReference w:type="default" r:id="rIdLetterFooter"/>' : "";
   const footerRefs = letterFooter || (pageNumberMode === "standard"
@@ -882,7 +905,10 @@ function buildDocument(blocks, args) {
       ? '<w:footerReference w:type="default" r:id="rIdFooterCenter"/>'
       : "");
   const footerDistance = format === "letter" || pageNumberMode === "standard" ? "1134" : "1588";
-  body.push(`<w:sectPr>${footerRefs}<w:pgSz w:w="${PAGE_W}" w:h="${PAGE_H}"/><w:pgMar w:top="${pageMarginTop}" w:right="${MARGIN.right}" w:bottom="${MARGIN.bottom}" w:left="${MARGIN.left}" w:header="720" w:footer="${footerDistance}" w:gutter="0"/><w:docGrid w:type="lines" w:linePitch="560"/></w:sectPr>`);
+  const pageSize = horizontalTable
+    ? `<w:pgSz w:w="${PAGE_H}" w:h="${PAGE_W}" w:orient="landscape"/>`
+    : `<w:pgSz w:w="${PAGE_W}" w:h="${PAGE_H}"/>`;
+  body.push(`<w:sectPr>${footerRefs}${pageSize}<w:pgMar w:top="${pageMarginTop}" w:right="${MARGIN.right}" w:bottom="${MARGIN.bottom}" w:left="${MARGIN.left}" w:header="720" w:footer="${footerDistance}" w:gutter="0"/><w:docGrid w:type="lines" w:linePitch="560"/></w:sectPr>`);
   return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:v="urn:schemas-microsoft-com:vml"><w:body>${body.join("")}</w:body></w:document>`;
 }
 
@@ -1003,7 +1029,7 @@ const md = fs.readFileSync(args.input, "utf8");
 try {
   const blocks = parseMarkdown(md);
   const documentXml = buildDocument(blocks, args);
-  const format = ["ordinary", "formal", "letter", "command", "minutes"].includes(args.format) ? args.format : "ordinary";
+  const format = ["ordinary", "formal", "letter", "command", "minutes", "horizontal-table"].includes(args.format) ? args.format : "ordinary";
   const pageNumberMode = resolvePageNumberMode(args, format);
   writeDocx(path.resolve(args.output), documentXml, pageNumberMode, format);
   console.log(`Generated: ${path.resolve(args.output)}`);

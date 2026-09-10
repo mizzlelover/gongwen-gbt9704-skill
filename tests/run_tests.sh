@@ -12,6 +12,7 @@ FIXTURE="$SKILL_DIR/tests/fixture.md"
 
 "$NODE" --check "$GEN"
 "$NODE" --check "$VERIFY"
+"$NODE" --check "$SKILL_DIR/tests/measure-header-coordinates.mjs"
 
 "$NODE" "$GEN" --input "$FIXTURE" --output "$TMP_DIR/layout.docx" --format ordinary --org "不应变红头的单位" --title "公文格式回归测试" --page-number center
 "$NODE" "$VERIFY" --input "$TMP_DIR/layout.docx" --profile ordinary
@@ -74,6 +75,9 @@ unzip -p "$TMP_DIR/letter.docx" word/footerLetter.xml | grep -q 'w:fill="FF0000"
 unzip -p "$TMP_DIR/with-attachment.docx" word/document.xml | grep -q '附件：1. 测试附件'
 unzip -p "$TMP_DIR/with-attachment.docx" word/document.xml | grep -q 'w:pageBreakBefore'
 
+"$NODE" "$GEN" --input "$FIXTURE" --output "$TMP_DIR/detached-attachment.docx" --format formal --letterhead preprinted --letterhead-reserve-mm 72 --doc-no "示例发〔2026〕1号" --title "分离附件测试" --attachment-note "1. 测试附件" --attachment-file "$TMP_DIR/attachment.md" --attachment-detached
+unzip -p "$TMP_DIR/detached-attachment.docx" word/document.xml | grep -q '示例发〔2026〕1号 附件1'
+
 if "$NODE" "$GEN" --input "$FIXTURE" --output "$TMP_DIR/bad-attachment.docx" --format formal --letterhead preprinted --letterhead-reserve-mm 72 --doc-no "示例发〔2026〕6号" --title "附件一致性测试" --attachment-note "1. 另一份附件" --attachment-file "$TMP_DIR/attachment.md" >"$TMP_DIR/bad-attachment.out" 2>&1; then
   echo "mismatched attachment note unexpectedly succeeded" >&2
   exit 1
@@ -91,6 +95,10 @@ grep -q 'GENERATOR ERROR:' "$TMP_DIR/bad-command.out"
 
 "$NODE" "$GEN" --input "$FIXTURE" --output "$TMP_DIR/minutes.docx" --format minutes --org "示例机关纪要" --title "纪要正文" --attendees "张三、李四" --absent "王五"
 "$NODE" "$VERIFY" --input "$TMP_DIR/minutes.docx" --profile minutes
+minutes_xml=$(unzip -p "$TMP_DIR/minutes.docx" word/document.xml)
+test "${minutes_xml%%出席：*}" != "$minutes_xml"
+test "${minutes_xml%%w:sectPr*}" != "$minutes_xml"
+test "${minutes_xml%%出席：*}" != "${minutes_xml%%w:sectPr*}"
 
 "$NODE" "$GEN" --input "$FIXTURE" --output "$TMP_DIR/seal-layout.docx" --format formal --letterhead preprinted --letterhead-reserve-mm 72 --title "签章位置测试" --sender "示例机关" --date "2026年9月10日" --seal-mode seal
 unzip -p "$TMP_DIR/seal-layout.docx" word/document.xml | grep -q 'w:right="1280"'
@@ -111,6 +119,18 @@ grep -q 'GENERATOR ERROR:' "$TMP_DIR/bad-date.out"
 "$NODE" "$VERIFY" --input "$TMP_DIR/letter-fields.docx" --profile letter
 unzip -p "$TMP_DIR/letter-fields.docx" word/document.xml | grep -q '000007'
 unzip -p "$TMP_DIR/letter-fields.docx" word/document.xml | grep -q '机密★3年'
+
+"$NODE" "$GEN" --input "$SKILL_DIR/tests/fixtures/visual-horizontal.md" --output "$TMP_DIR/horizontal-table.docx" --format horizontal-table --title "横排表格测试" --page-number standard
+"$NODE" "$VERIFY" --input "$TMP_DIR/horizontal-table.docx" --profile horizontal-table
+unzip -p "$TMP_DIR/horizontal-table.docx" word/document.xml | grep -q 'w:orient="landscape"'
+unzip -p "$TMP_DIR/horizontal-table.docx" word/document.xml | grep -q 'w:tblW w:w="12756"'
+
+"$NODE" "$GEN" --input "$FIXTURE" --output "$TMP_DIR/joint.docx" --format formal --letterhead digital --org "主办机关文件" --joint-org "协办机关" --doc-no "示例发〔2026〕3号" --title "联合行文测试"
+"$NODE" "$VERIFY" --input "$TMP_DIR/joint.docx" --profile formal --letterhead digital
+unzip -p "$TMP_DIR/joint.docx" word/document.xml | grep -q '主办机关'
+unzip -p "$TMP_DIR/joint.docx" word/document.xml | grep -q '协办机关'
+unzip -p "$TMP_DIR/joint.docx" word/document.xml | grep -q '文件'
+unzip -p "$TMP_DIR/joint.docx" word/document.xml | grep -q 'w:sz w:val="48"'
 
 if "$NODE" "$GEN" --input "$FIXTURE" --output "$TMP_DIR/strict.docx" --format formal --letterhead digital --org "示例单位文件" --title "严格字体测试" --require-standard-fonts >"$TMP_DIR/strict.out" 2>&1; then
   if ! fc-list -f '%{family}\n' | grep -Eq '方正小标宋简体|方正小标宋_GBK|FZXiaoBiaoSong'; then

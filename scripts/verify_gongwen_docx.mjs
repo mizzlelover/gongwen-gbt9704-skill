@@ -6,7 +6,7 @@ import os from "node:os";
 import path from "node:path";
 
 function usage() {
-  console.log("Usage: node verify_gongwen_docx.mjs --input file.docx [--profile ordinary|formal|letter|command|minutes] [--letterhead preprinted|digital] [--require-standard-fonts]");
+  console.log("Usage: node verify_gongwen_docx.mjs --input file.docx [--profile ordinary|formal|letter|command|minutes|horizontal-table] [--letterhead preprinted|digital] [--require-standard-fonts]");
 }
 
 function parseArgs(argv) {
@@ -35,7 +35,7 @@ function paragraphs(xml) { return xml.match(/<w:p(?:\s[^>]*)?>[\s\S]*?<\/w:p>/g)
 const args = parseArgs(process.argv);
 if (!args.input || !fs.existsSync(args.input)) { usage(); process.exit(2); }
 const profile = args.profile ?? "ordinary";
-if (!["ordinary", "formal", "letter", "command", "minutes"].includes(profile)) { console.error("Unsupported profile."); process.exit(2); }
+if (!["ordinary", "formal", "letter", "command", "minutes", "horizontal-table"].includes(profile)) { console.error("Unsupported profile."); process.exit(2); }
 
 const doc = readPart(args.input, "word/document.xml");
 const styles = readPart(args.input, "word/styles.xml");
@@ -71,9 +71,10 @@ const installedFonts = (() => {
 const checks = [];
 function check(name, ok, detail) { checks.push({ name, ok, detail }); }
 
-check("A4 page size", /<w:pgSz[^>]*w:w="11906"[^>]*w:h="16838"/.test(doc), "210 mm x 297 mm");
-const expectedTopMargin = profile === "letter" ? "1701" : profile === "command" ? "1134" : "2098";
-check("Page margins", new RegExp(`<w:pgMar[^>]*w:top="${expectedTopMargin}"[^>]*w:right="1474"[^>]*w:bottom="1984"[^>]*w:left="1588"`).test(doc), `top ${expectedTopMargin === "2098" ? 37 : expectedTopMargin === "1701" ? 30 : 20} mm, bottom 35, left 28, right 26 mm`);
+const horizontal = profile === "horizontal-table";
+check("A4 page size", horizontal ? /<w:pgSz[^>]*w:w="16838"[^>]*w:h="11906"[^>]*w:orient="landscape"/.test(doc) : /<w:pgSz[^>]*w:w="11906"[^>]*w:h="16838"/.test(doc), horizontal ? "297 mm x 210 mm landscape table page" : "210 mm x 297 mm");
+const expectedTopMargin = profile === "letter" ? "1701" : "2098";
+check("Page margins", new RegExp(`<w:pgMar[^>]*w:top="${expectedTopMargin}"[^>]*w:right="1474"[^>]*w:bottom="1984"[^>]*w:left="1588"`).test(doc), `top ${expectedTopMargin === "2098" ? 37 : 30} mm, bottom 35, left 28, right 26 mm`);
 check("Document grid", /<w:docGrid[^>]*w:linePitch="560"/.test(doc), "28 pt implementation grid");
 const bodyFontStandard = /w:eastAsia="(?:仿宋|仿宋_GB2312|FangSong|FangSong_GB2312)"/.test(styles);
 const bodyFontAvailable = bodyFontStandard || (!requireStandardFonts && /w:eastAsia="STFangsong"/.test(styles));
@@ -122,13 +123,16 @@ if (profile === "ordinary") {
   check("Odd/even page positions", /w:jc w:val="right"/.test(footerOdd) && /w:jc w:val="left"/.test(footerEven), "odd right and even left");
   check("Formal page-number distance", /w:footer="1134"/.test(doc), "page-number footer is 7 mm below the 225 mm type area");
 }
+if (horizontal) {
+  check("Horizontal table width", /<w:tblW w:w="12756" w:type="dxa"/.test(doc), "table uses the 225 mm landscape writing width");
+}
 if (profile === "formal") {
   if (args.letterhead === "digital") {
     check("Digital red head", /w:color w:val="FF0000"/.test(doc), "digital formal output contains requested red elements");
     check("Red rule thickness", /height:0\.5mm/.test(doc), "header separator uses the recommended 0.35-0.5 mm range");
     check("Red rule width", /style="width:156mm;height:0\.5mm"/.test(doc), "header separator spans the 156 mm type area");
     const docParagraphs = paragraphs(doc);
-    const agencyIndex = docParagraphs.findIndex((p) => /w:sz w:val="56"/.test(p) && /w:color w:val="FF0000"/.test(p));
+    const agencyIndex = docParagraphs.findIndex((p) => /w:sz w:val="(?:56|48|44)"/.test(p) && /w:color w:val="FF0000"/.test(p));
     // Keep this expected value independent from the generator's calibration
     // constants. It is 35 mm in twentieths of a point, as required by 7.2.4.
     const agencyOffsetFromTypeAreaTop = Math.round(35 * 56.692913);
@@ -140,7 +144,7 @@ if (profile === "formal") {
     check("Digital red-head field frames", fixedHeaderFrames.every((value, index) => value === index * 560 || value === agencyOffsetFromTypeAreaTop), "left-corner fields use first-line grid positions without changing the agency mark anchor");
     const docNoIndex = docParagraphs.findIndex((p) => /〔\d{4}〕[1-9]\d*号/.test(textOf(p)));
     const agencyToDocNo = agencyIndex >= 0 && docNoIndex > agencyIndex ? docParagraphs.slice(agencyIndex + 1, docNoIndex) : [];
-    const agencyFlowSpacer = agencyToDocNo.filter((p) => /w:before="1880"/.test(p));
+    const agencyFlowSpacer = agencyToDocNo.filter((p) => /w:before="[1-9]\d*"/.test(p) && /w:snapToGrid w:val="false"/.test(p));
     const agencyGapLines = agencyToDocNo.slice(-2);
     check("Agency mark to document number two blank lines", docNoIndex < 0 || (agencyFlowSpacer.length === 1 && agencyGapLines.length === 2 && agencyGapLines.every(isExplicitBlankGridLine)), "document number follows the fixed agency mark with two exact 28-point grid lines");
     check("Two blank lines below red rule", hasExplicitTwoLineTitleGap, "title is preceded by two exact 28-point blank paragraphs below the red rule");
@@ -165,6 +169,7 @@ if (profile === "letter") {
 if (profile === "command") {
   const commandParagraphs = paragraphs(doc);
   const commandAgencyIndex = commandParagraphs.findIndex((p) => /w:color w:val="FF0000"/.test(p));
+  check("Command agency position", commandAgencyIndex >= 0 && /w:before="1134"/.test(commandParagraphs[commandAgencyIndex]), "command mark starts 20 mm below the 37 mm type-area top");
   const commandOrderIndex = commandParagraphs.findIndex((p, index) => index > commandAgencyIndex && /w:jc w:val="center"/.test(p) && /w:sz w:val="32"/.test(p) && !/w:color w:val="FF0000"/.test(p));
   const agencyToOrder = commandAgencyIndex >= 0 && commandOrderIndex > commandAgencyIndex ? commandParagraphs.slice(commandAgencyIndex + 1, commandOrderIndex) : [];
   check("Command agency-to-order spacing", commandOrderIndex < 0 || (agencyToOrder.length === 2 && agencyToOrder.every(isExplicitBlankGridLine)), "command agency mark is followed by two exact 28-point grid lines");

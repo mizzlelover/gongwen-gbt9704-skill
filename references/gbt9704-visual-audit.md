@@ -4,19 +4,17 @@
 
 ## 核验方法
 
-2026 年 9 月 10 日运行：
+2026 年 9 月 11 日运行：
 
 ```bash
-bash tests/visual-audit.sh /tmp/gongwen-visual-audit-latest
+bash tests/visual-audit.sh /tmp/gongwen-visual-audit-all-rules
 ```
 
-脚本实际生成 13 份 DOCX，逐份通过校验器，使用 LibreOffice 转 PDF，再用 `pdftoppm` 输出 24 张 PNG。人工检查以 PNG 为准，XML 和校验器只作为辅助证据。脚本还用 `pdftotext -bbox-layout` 独立量测电子红头首页：份号字形落在 37 mm 版心首行附近，机关标志字形落在 35 mm 版心上边缘下方附近，并把带版头字段与不带字段的机关标志位置差控制在 0.8 mm 内；结果写入运行目录的 `logs/header-coordinates.log`。当前批次的文件清单保存在运行目录的 `manifest.tsv`，每份文件的校验日志保存在 `logs/`。
+脚本实际生成 18 份 DOCX，逐份通过校验器，使用 LibreOffice 转 PDF，再用 `pdftoppm` 输出 37 个 PDF 页面和 PNG。人工检查以 PNG 为准，XML 和校验器只作为辅助证据。脚本还用 `pdftotext -bbox-layout` 独立量测电子红头首页：份号字形落在 37 mm 版心首行附近，机关标志字形落在 35 mm 版心上边缘下方附近，并把带版头字段与不带字段的机关标志位置差控制在 0.8 mm 内；结果写入运行目录的 `logs/header-coordinates.log`。当前批次的文件清单保存在提交的 [`assets/visual-audit/all-rules/manifest.tsv`](assets/visual-audit/all-rules/manifest.tsv)，单页证据和总览图保存在同目录；每份文件的校验日志保存在运行目录的 `logs/`。完整逐条矩阵见 [`gbt9704-screenshot-evidence.md`](gbt9704-screenshot-evidence.md)。
 
-![各场景首页视觉核验](assets/visual-audit/first-pages.png)
+![本次18个场景全览](assets/visual-audit/all-rules/contact-sheet.png)
 
-![全部核验页缩略图](assets/visual-audit/all-pages.png)
-
-![单双页页码与末页版记](assets/visual-audit/long-pages-colophon.png)
+本批次的原始单页截图、场景清单和坐标日志见 [`assets/visual-audit/all-rules/`](assets/visual-audit/all-rules)。
 
 ## 场景证据
 
@@ -30,9 +28,9 @@ bash tests/visual-audit.sh /tmp/gongwen-visual-audit-latest
 | 长文版记 | `formal-long-1.png`、`formal-long-2.png`、`formal-long-3.png` | 单页右、双页左页码连续；末页版记贴近版心底部，粗细线顺序可见。 |
 | 盖章/签名章位置 | `formal-seal-2.png`、`formal-signed-2.png` | 文字落款和日期位置已生成；实体印章或签名章图片没有被伪造，需在 Word/WPS 或打印环节完成。 |
 | 信函 | `letter-1.png`、`letter-fields-1.png` | 上粗下细双红线、文号、标题和页末上细下粗双红线可见；带份号、密级、紧急程度的回归页也按第一条双线下顺序出现；不显示页码。 |
-| 命令（令） | `command-1.png` | 机关标志、令号下空二行、正文前再空二行可见。 |
-| 纪要 | `minutes-1.png`、`minutes-2.png` | “出席/请假/列席”标签为黑体，人员为仿宋；人员标签左空二字，回行对齐。 |
-| 横排表格 | `table-1.png` | 当前示例仍是纵向表格。这一张图是故意保留的缺口证据，不能把普通纵向表格宣称为标准横排表格。 |
+| 命令（令） | `command-1.png` | 机关标志距版心上边缘20mm，令号下空二行、正文前再空二行可见。 |
+| 纪要 | `minutes-1.png`、`minutes-2.png` | “出席/请假/列席”标签为黑体，人员为仿宋；人员标签左空二字，回行对齐，且已移动到正文/附件说明下一行。 |
+| 横排表格 | `horizontal-table-1.png`、`table-1.png` | `horizontal-table-1.png` 已实际渲染 A4 横向页面和225mm表格；`table-1.png` 保留纵向对照。单双页表头朝向仍需目标 Word/WPS 模板处理。 |
 
 ## 条款逐项对照
 
@@ -75,19 +73,22 @@ bash tests/visual-audit.sh /tmp/gongwen-visual-audit-latest
 | 7.4.2 | 抄送机关字号、缩进、句号 | 截图通过 | `formal-long-3.png`；多行和主送移版记仍需结合机关模板。 |
 | 7.4.3 | 印发机关、日期、印发和细线 | 截图通过 | `formal-long-3.png`；实际名称过长时仍需在目标软件确认。 |
 | 7.5 | 页码字号、单双页位置、7 mm、附件连续 | 截图通过 | `formal-long-2.png`、`formal-long-3.png`、`formal-attachments-4.png`；空白页及特殊版记例外需人工复核。 |
-| 8 | 横排表格 | 当前未自动化 | `table-1.png` 明确显示当前生成器输出纵向表格；横排 A4 表格、表头方向和页码方向必须使用 Word/WPS 专用横向模板。 |
+| 8 | 横排表格 | 部分通过，表头方向未自动化 | `horizontal-table-1.png` 显示横向 A4 表格和标准页码；`table-1.png` 是纵向对照。单双页表头在订口/切口的方向切换尚未自动化，必须使用 Word/WPS 专用横向模板。 |
 | 9 | 计量单位、标点、数字 | 结构通过，仍需人工 | 字段边界已校验；正文语义必须按引用标准审校。 |
 | 10.1 | 信函格式 | 结构通过，仍需人工 | `letter-1.png` 显示 170 mm 上粗下细、下粗上细双线、文号、标题、无首页页码和无版记分隔线；可选份号、密级、紧急程度已在回归场景中按第一条双线下的顺序生成，联合行文仍需专用模板。 |
-| 10.2 | 命令（令）格式 | 结构通过，仍需人工 | `command-1.png` 显示机关全称加“命令”、令号下空二行和正文下空二行；签名章和日期按7.3.5.3仍需人工。 |
-| 10.3 | 纪要格式 | 截图通过 | `minutes-1.png`、`minutes-2.png`；机关标志 35 mm、人员标签字体和两字起排已观察。 |
+| 10.2 | 命令（令）格式 | 结构通过，仍需人工 | `command-1.png` 显示机关全称加“命令”、标志距版心上边缘20mm、令号下空二行和正文下空二行；签名章和日期按7.3.5.3仍需人工。 |
+| 10.3 | 纪要格式 | 截图通过 | `minutes-1.png`、`minutes-2.png`；机关标志35mm、人员标签字体、两字起排和人员名单在正文/附件说明下一行均已观察。 |
 | 11 | 标准式样图 | 结构通过，仍需人工 | 本记录使用标准条文和实际截图；最终发文仍须对照本单位现行式样图或授权模板。 |
 
 ## 发现并修正的实现问题
 
 1. 版头字段曾以普通段落排列，份号、密级、紧急程度会把电子红头机关标志向下推移，预印红头套打的留白也会被挤开。现在这些字段改为首面固定定位，版心中保留等高占位；`formal-digital-all-1.png` 和 `formal-preprinted-1.png` 已重新观察。
-2. 红线下标题曾只依赖段前距，部分渲染器会把标题贴在线上。现在红线或纸上红线之后写入两个显式 28 磅空段落；截图能看到标题与红线之间的实际距离。
-3. 主送机关带不带末尾冒号时曾可能重复，现在归一化为一行全角冒号。
-4. 纪要出席名单曾从版心左边缘开始，现改为左空二字并用悬挂缩进让回行对齐。
+2. 命令（令）分支曾把20mm误当成纸顶边距；现在恢复37mm天头，并从版心上边缘下20mm量测。
+3. 联合行文曾把联署机关拆成多行；现在主办机关在前、联署名称同一居中行，并在名称过长时自适应标志字号。
+4. 纪要人员曾追加在附件和版记之后；现在紧跟正文或附件说明下一行。
+5. 红线下标题曾只依赖段前距，部分渲染器会把标题贴在线上。现在红线或纸上红线之后写入两个显式 28 磅空段落；截图能看到标题与红线之间的实际距离。
+6. 主送机关带不带末尾冒号时曾可能重复，现在归一化为一行全角冒号。
+7. 纪要出席名单曾从版心左边缘开始，现改为左空二字并用悬挂缩进让回行对齐。
 
 ## 仍然不能由本工具单独保证的事项
 

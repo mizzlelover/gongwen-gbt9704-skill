@@ -20,11 +20,12 @@ function decodeHtml(value) {
 
 function words(pdf) {
   const html = execFileSync("pdftotext", ["-f", "1", "-l", "1", "-bbox-layout", pdf, "-"], { encoding: "utf8" });
-  return [...html.matchAll(/<word\s+[^>]*xMin="([0-9.]+)"[^>]*yMin="([0-9.]+)"[^>]*xMax="([0-9.]+)"[^>]*>([\s\S]*?)<\/word>/g)].map((match) => ({
+  return [...html.matchAll(/<word\s+[^>]*xMin="([0-9.]+)"[^>]*yMin="([0-9.]+)"[^>]*xMax="([0-9.]+)"[^>]*yMax="([0-9.]+)"[^>]*>([\s\S]*?)<\/word>/g)].map((match) => ({
     xMinPt: Number(match[1]),
     yMinPt: Number(match[2]),
     xMaxPt: Number(match[3]),
-    text: decodeHtml(match[4]),
+    yMaxPt: Number(match[4]),
+    text: decodeHtml(match[5]),
   }));
 }
 
@@ -34,9 +35,12 @@ function findText(pdfWords, expected) {
   // measurement is independent of that tokenization choice.
   const rows = [];
   for (const word of [...pdfWords].sort((left, right) => left.yMinPt - right.yMinPt || left.xMinPt - right.xMinPt)) {
-    const row = rows.find(({ yMinPt }) => Math.abs(yMinPt - word.yMinPt) <= 1.5);
-    if (row) row.words.push(word);
-    else rows.push({ yMinPt: word.yMinPt, words: [word] });
+    const row = rows.find(({ yMinPt, yMaxPt }) => word.yMinPt <= yMaxPt + 1.5 && word.yMaxPt >= yMinPt - 1.5);
+    if (row) {
+      row.words.push(word);
+      row.yMinPt = Math.min(row.yMinPt, word.yMinPt);
+      row.yMaxPt = Math.max(row.yMaxPt, word.yMaxPt);
+    } else rows.push({ yMinPt: word.yMinPt, yMaxPt: word.yMaxPt, words: [word] });
   }
   for (const row of rows) {
     const ordered = row.words.sort((left, right) => left.xMinPt - right.xMinPt);

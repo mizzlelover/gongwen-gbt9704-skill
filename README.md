@@ -86,7 +86,7 @@ https://std.samr.gov.cn/gb/search/gbDetailed?id=lOIe27f77QU%3D&mode=p
 | 标题与目录 | 四级标题写入 Word/WPS 标题样式及大纲级别，可插入自动目录 |
 | 页码 | 居中、单双页或不显示 |
 | 印章、签名章 | 在生成的 DOCX 中按实际需要插入图片或完成实体盖章 |
-| 特定格式 | `letter`、`command`、`minutes` 使用对应生成分支 |
+| 特定格式 | `letter`、`command`、`minutes`、`horizontal-table` 使用对应生成分支；联合行文用 `--joint-org`，分离装订附件用 `--attachment-detached` |
 
 GB/T 9704-2012 当前为现行标准，2025-05-30 复审继续有效。标准适用于党政机关制发公文，其他机关和单位可以参照执行。[全国标准信息公共服务平台](https://std.samr.gov.cn/gb/search/gbDetailed?id=lOIe27f77QU%3D&mode=p)
 
@@ -106,11 +106,11 @@ node scripts/verify_gongwen_docx.mjs --input /tmp/formal.docx --profile formal -
 
 只有需要完整电子红头文件时，才加 `--letterhead digital`。红头和标题要使用目标电脑中实际安装的小标宋体；生成器缺少小标宋体或仿宋体时会在终端明确警告并写出替代字体，要求严格阻止替代输出时加 `--require-standard-fonts`。红线下标题会写入两个显式的28磅版心空行，不会依赖渲染器自行解释段前距；发文机关标志到文号也按相同方式留出两行。上行文的文号和签发人会在同一行编排。打开文档后，Word/WPS 的“引用→目录”可以按“标题1—标题4”生成并更新目录；是否显示第四级，在目录设置中选择。
 
-信函、命令（令）和纪要走专用分支：信函生成170mm上粗下细、下页边20mm处上细下粗的两条红色双线，底线放在页脚并关闭页码；命令（令）落实机关标志下空二行、令号下空二行；纪要把“出席”“请假”“列席”标签设为黑体、人员名单设为仿宋。附件可用重复的 `--attachment-file` 另页生成“附件”标签、第三行标题和正文，并保持正式页码连续。带抄送或印发信息时，版记浮动锚定在最后一页版心底部，首末粗线约0.35mm、中间细线约0.25mm。
+信函、命令（令）、纪要和横排表格走专用分支：信函生成170mm上粗下细、下页边20mm处上细下粗的两条红色双线，底线放在页脚并关闭页码；命令（令）落实机关标志距版心上边缘20mm、令号下空二行、正文下空二行；纪要把“出席”“请假”“列席”标签设为黑体、人员名单设为仿宋，并放在正文或附件说明下一行；横排表格生成横向A4和225mm表格，单双页表头方向仍需目标Word/WPS模板核对。联合行文可重复传入 `--joint-org`，不能与正文一起装订的附件加 `--attachment-detached` 会在首行补排文号和附件序号。附件可用重复的 `--attachment-file` 另页生成“附件”标签、第三行标题和正文，并保持正式页码连续。带抄送或印发信息时，版记浮动锚定在最后一页版心底部，首末粗线约0.35mm、中间细线约0.25mm。
 
 ## 跨平台安装
 
-本项目使用开放的 `SKILL.md` 目录结构，可在 Codex、Claude Code、OpenCode、Trae Code、Trae CLI、Kimi Code CLI、Kimi Code、WorkBuddy 和 ZCode 使用。
+本项目使用开放的 `SKILL.md` 目录结构，可在 Codex、Claude Code、OpenCode、Trae Code、Trae CLI、Kimi Code CLI、Kimi Code、TraeWork、WorkBuddy 和 ZCode 使用。
 
 macOS / Linux：
 
@@ -135,7 +135,8 @@ Windows：
 - [生成器](scripts/generate_gongwen_docx.mjs)：根据输入生成 DOCX 版式。
 - [校验器](scripts/verify_gongwen_docx.mjs)：检查生成器可承诺的 DOCX 版式要素。
 - [回归测试](tests/run_tests.sh)：运行居中与单双页页码生成、DOCX 包结构与 PDF 转换验证。
-- [全条款视觉核验](references/gbt9704-visual-audit.md)：实际生成 13 份 DOCX、渲染 24 张 PNG，并逐条记录截图证据与人工边界。
+- [全条款视觉核验](references/gbt9704-visual-audit.md)：实际生成 18 份 DOCX、37 个 PDF 页面和 PNG，并逐条记录截图证据与人工边界。
+- [全条款截图证据矩阵](references/gbt9704-screenshot-evidence.md)：把 GB/T 9704-2012 每个条款绑定到实际截图，明确哪些项目截图不能证明。
 - [版头坐标量测](tests/measure-header-coordinates.mjs)：用 PDF 字形坐标独立核对份号首行、机关标志 35 mm 定位及可选字段不移位。
 - [跨平台安装测试](tests/test-install.sh)：隔离环境中验证九个本地目录和 TraeWork 导入包。
 
