@@ -31,14 +31,18 @@ unzip -p "$TMP_DIR/standard.docx" word/document.xml | grep -q 'w:snapToGrid w:va
 unzip -p "$TMP_DIR/digital.docx" word/document.xml | grep -q '示例单位文件'
 unzip -p "$TMP_DIR/digital.docx" word/document.xml | grep -q 'FF0000'
 unzip -p "$TMP_DIR/digital.docx" word/document.xml | grep -q 'height:0.5mm'
-unzip -p "$TMP_DIR/digital.docx" word/document.xml | grep -q 'w:framePr.*w:xAlign="center".*w:y="2126"'
-unzip -p "$TMP_DIR/digital.docx" word/document.xml | grep -q 'w:before="2015"'
+unzip -p "$TMP_DIR/digital.docx" word/document.xml | grep -q 'w:framePr.*w:hAnchor="margin".*w:vAnchor="margin".*w:xAlign="center".*w:y="1984"'
+unzip -p "$TMP_DIR/digital.docx" word/document.xml | grep -q 'w:before="0"'
 unzip -p "$TMP_DIR/digital.docx" word/document.xml | grep -q 'w:snapToGrid w:val="false"'
 
 "$NODE" "$GEN" --input "$FIXTURE" --output "$TMP_DIR/digital-fields.docx" --format formal --letterhead digital --copy-no 7 --secret "机密★3年" --urgent "特急" --org "示例单位文件" --doc-no "示例发〔2026〕3号" --title "版头字段定位测试"
 "$NODE" "$VERIFY" --input "$TMP_DIR/digital-fields.docx" --profile formal --letterhead digital
-unzip -p "$TMP_DIR/digital-fields.docx" word/document.xml | grep -q 'w:framePr.*w:xAlign="left".*w:y="275"'
-unzip -p "$TMP_DIR/digital-fields.docx" word/document.xml | grep -q 'w:before="2015"'
+unzip -p "$TMP_DIR/digital-fields.docx" word/document.xml | grep -q 'w:framePr.*w:hAnchor="margin".*w:vAnchor="margin".*w:xAlign="left".*w:y="0"'
+unzip -p "$TMP_DIR/digital-fields.docx" word/document.xml | grep -q 'w:framePr.*w:hAnchor="margin".*w:vAnchor="margin".*w:xAlign="left".*w:y="560"'
+
+"$NODE" "$GEN" --input "$FIXTURE" --output "$TMP_DIR/secret-only.docx" --format formal --letterhead digital --secret "机密★3年" --org "示例单位文件" --doc-no "示例发〔2026〕5号" --title "密级首行留空测试"
+"$NODE" "$VERIFY" --input "$TMP_DIR/secret-only.docx" --profile formal --letterhead digital
+unzip -p "$TMP_DIR/secret-only.docx" word/document.xml | grep -q 'w:framePr.*w:vAnchor="margin".*w:y="560"'
 
 "$NODE" "$GEN" --input "$FIXTURE" --output "$TMP_DIR/preprinted-fields.docx" --format formal --letterhead preprinted --letterhead-reserve-mm 72 --copy-no 7 --secret "机密★3年" --urgent "特急" --doc-no "示例发〔2026〕4号" --title "预印字段定位测试"
 "$NODE" "$VERIFY" --input "$TMP_DIR/preprinted-fields.docx" --profile formal --letterhead preprinted
@@ -70,8 +74,20 @@ unzip -p "$TMP_DIR/letter.docx" word/footerLetter.xml | grep -q 'w:fill="FF0000"
 unzip -p "$TMP_DIR/with-attachment.docx" word/document.xml | grep -q '附件：1. 测试附件'
 unzip -p "$TMP_DIR/with-attachment.docx" word/document.xml | grep -q 'w:pageBreakBefore'
 
+if "$NODE" "$GEN" --input "$FIXTURE" --output "$TMP_DIR/bad-attachment.docx" --format formal --letterhead preprinted --letterhead-reserve-mm 72 --doc-no "示例发〔2026〕6号" --title "附件一致性测试" --attachment-note "1. 另一份附件" --attachment-file "$TMP_DIR/attachment.md" >"$TMP_DIR/bad-attachment.out" 2>&1; then
+  echo "mismatched attachment note unexpectedly succeeded" >&2
+  exit 1
+fi
+grep -q 'GENERATOR ERROR:' "$TMP_DIR/bad-attachment.out"
+
 "$NODE" "$GEN" --input "$FIXTURE" --output "$TMP_DIR/command.docx" --format command --org "示例机关命令" --doc-no "第1号" --title "命令正文"
 "$NODE" "$VERIFY" --input "$TMP_DIR/command.docx" --profile command
+
+if "$NODE" "$GEN" --input "$FIXTURE" --output "$TMP_DIR/bad-command.docx" --format command --org "示例机关" --doc-no "第1号" --title "命令正文" >"$TMP_DIR/bad-command.out" 2>&1; then
+  echo "command without 命令/令 unexpectedly succeeded" >&2
+  exit 1
+fi
+grep -q 'GENERATOR ERROR:' "$TMP_DIR/bad-command.out"
 
 "$NODE" "$GEN" --input "$FIXTURE" --output "$TMP_DIR/minutes.docx" --format minutes --org "示例机关纪要" --title "纪要正文" --attendees "张三、李四" --absent "王五"
 "$NODE" "$VERIFY" --input "$TMP_DIR/minutes.docx" --profile minutes
@@ -90,6 +106,11 @@ if "$NODE" "$GEN" --input "$FIXTURE" --output "$TMP_DIR/bad-date.docx" --format 
   exit 1
 fi
 grep -q 'GENERATOR ERROR:' "$TMP_DIR/bad-date.out"
+
+"$NODE" "$GEN" --input "$FIXTURE" --output "$TMP_DIR/letter-fields.docx" --format letter --org "示例机关" --copy-no 7 --secret "机密★3年" --urgent "特急" --doc-no "示例〔2026〕2号" --title "信函字段边界"
+"$NODE" "$VERIFY" --input "$TMP_DIR/letter-fields.docx" --profile letter
+unzip -p "$TMP_DIR/letter-fields.docx" word/document.xml | grep -q '000007'
+unzip -p "$TMP_DIR/letter-fields.docx" word/document.xml | grep -q '机密★3年'
 
 if "$NODE" "$GEN" --input "$FIXTURE" --output "$TMP_DIR/strict.docx" --format formal --letterhead digital --org "示例单位文件" --title "严格字体测试" --require-standard-fonts >"$TMP_DIR/strict.out" 2>&1; then
   if ! fc-list -f '%{family}\n' | grep -Eq '方正小标宋简体|方正小标宋_GBK|FZXiaoBiaoSong'; then

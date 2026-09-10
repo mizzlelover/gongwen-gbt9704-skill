@@ -22,5 +22,7 @@ for path in \
 done
 
 unzip -t "$skill_dir/dist/traework-gongwen-skill.zip" >/dev/null
-unzip -l "$skill_dir/dist/traework-gongwen-skill.zip" | grep -q 'gongwen/SKILL.md'
+unzip -l "$skill_dir/dist/traework-gongwen-skill.zip" >"$test_home/traework-listing.txt"
+grep -q 'gongwen/SKILL.md' "$test_home/traework-listing.txt"
+grep -q 'gongwen/tests/visual-audit.sh' "$test_home/traework-listing.txt"
 printf '%s\n' 'cross-platform installation tests passed'

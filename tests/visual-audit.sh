@@ -25,6 +25,7 @@ node "$gen" --input "$all" --output "$out_dir/docx/formal-signed.docx" --format 
 node "$gen" --input "$all" --output "$out_dir/docx/formal-attachments.docx" --format formal --letterhead preprinted --letterhead-reserve-mm 72 --doc-no "示例发〔2026〕10号" --title "多附件实测" --attachment-note "1. 数据清单；2. 实施计划。" --attachment-file "$attach_a" --attachment-file "$attach_b" --page-number standard
 node "$gen" --input "$long" --output "$out_dir/docx/formal-long.docx" --format formal --letterhead preprinted --letterhead-reserve-mm 72 --doc-no "示例发〔2026〕11号" --title "长文版记与单双页实测" --cc "办公室、财务部、审计部、采购部、法务部、信息中心" --print-org "示例印发机关" --print-date "2026年9月10日" --page-number standard
 node "$gen" --input "$all" --output "$out_dir/docx/letter.docx" --format letter --org "示例机关" --doc-no "示例〔2026〕12号" --title "信函格式实测" --page-number none
+node "$gen" --input "$all" --output "$out_dir/docx/letter-fields.docx" --format letter --org "示例机关" --copy-no 7 --secret "机密★3年" --urgent "特急" --doc-no "示例〔2026〕14号" --title "信函版头字段实测" --page-number none
 node "$gen" --input "$all" --output "$out_dir/docx/command.docx" --format command --org "示例机关命令" --doc-no "第1号" --title "命令格式实测" --page-number standard
 node "$gen" --input "$all" --output "$out_dir/docx/minutes.docx" --format minutes --org "示例机关纪要" --title "纪要格式实测" --attendees "张三（办公室）、李四（财务部）" --absent "王五（审计部）" --observers "赵六（采购部）" --page-number standard
 node "$gen" --input "$horizontal" --output "$out_dir/docx/table.docx" --format formal --letterhead preprinted --letterhead-reserve-mm 72 --doc-no "示例发〔2026〕13号" --title "表格版式实测" --page-number standard
@@ -33,7 +34,7 @@ for file in "$out_dir/docx"/*.docx; do
   base=$(basename "$file" .docx)
   case "$base" in
     ordinary) profile=ordinary ;;
-    letter) profile=letter ;;
+    letter|letter-fields) profile=letter ;;
     command) profile=command ;;
     minutes) profile=minutes ;;
     *) profile=formal ;;
@@ -54,6 +55,10 @@ for file in "$out_dir/pdf"/*.pdf; do
   base=$(basename "$file" .pdf)
   pdftoppm -png -r 150 "$file" "$out_dir/png/$base" >"$out_dir/logs/$base.pdftoppm.log" 2>&1
 done
+node "$skill_dir/tests/measure-header-coordinates.mjs" \
+  "$out_dir/pdf/formal-digital-all.pdf" \
+  "$out_dir/pdf/formal-digital-upward.pdf" \
+  "示例单位文件" "000007" | tee "$out_dir/logs/header-coordinates.log"
 
 {
   echo -e "profile\tdocx\tpdf\tscreenshot_prefix"

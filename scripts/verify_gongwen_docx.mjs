@@ -129,7 +129,15 @@ if (profile === "formal") {
     check("Red rule width", /style="width:156mm;height:0\.5mm"/.test(doc), "header separator spans the 156 mm type area");
     const docParagraphs = paragraphs(doc);
     const agencyIndex = docParagraphs.findIndex((p) => /w:sz w:val="56"/.test(p) && /w:color w:val="FF0000"/.test(p));
-    check("Digital red-head agency position", agencyIndex >= 0 && /w:framePr[^>]*w:hAnchor="margin"[^>]*w:vAnchor="page"[^>]*w:xAlign="center"[^>]*w:y="2126"/.test(docParagraphs[agencyIndex]) && /w:before="2015"/.test(docParagraphs[agencyIndex]), "agency mark is independently fixed at the 35 mm type-area position");
+    // Keep this expected value independent from the generator's calibration
+    // constants. It is 35 mm in twentieths of a point, as required by 7.2.4.
+    const agencyOffsetFromTypeAreaTop = Math.round(35 * 56.692913);
+    check("Digital red-head agency position", agencyIndex >= 0 && new RegExp(`w:framePr[^>]*w:hAnchor="margin"[^>]*w:vAnchor="margin"[^>]*w:xAlign="center"[^>]*w:y="${agencyOffsetFromTypeAreaTop}"`).test(docParagraphs[agencyIndex]) && /w:before="0"/.test(docParagraphs[agencyIndex]), "agency mark is independently fixed 35 mm below the type-area top");
+    const fixedHeaderFrames = docParagraphs
+      .filter((p) => /w:framePr[^>]*w:hAnchor="margin"[^>]*w:vAnchor="margin"/.test(p))
+      .map((p) => Number((p.match(/w:y="(\d+)"/) ?? [])[1]))
+      .filter((value) => Number.isFinite(value));
+    check("Digital red-head field frames", fixedHeaderFrames.every((value, index) => value === index * 560 || value === agencyOffsetFromTypeAreaTop), "left-corner fields use first-line grid positions without changing the agency mark anchor");
     const docNoIndex = docParagraphs.findIndex((p) => /〔\d{4}〕[1-9]\d*号/.test(textOf(p)));
     const agencyToDocNo = agencyIndex >= 0 && docNoIndex > agencyIndex ? docParagraphs.slice(agencyIndex + 1, docNoIndex) : [];
     const agencyFlowSpacer = agencyToDocNo.filter((p) => /w:before="1880"/.test(p));

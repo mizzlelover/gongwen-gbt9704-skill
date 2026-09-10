@@ -9,14 +9,18 @@ const PAGE_H = 16838;
 const MARGIN = { top: 2098, bottom: 1984, left: 1588, right: 1474 };
 const CONTENT_W = PAGE_W - MARGIN.left - MARGIN.right;
 const FIRST_LINE_INDENT = 640;
-// Word frame coordinates are relative to the type-area margin in the Office
-// and LibreOffice renderers used by this skill. These values keep first-page
-// header fields and the centered agency mark independent of one another.
-const HEADER_FIELD_BEFORE = 1760;
-const AGENCY_FRAME_BEFORE = 2015;
+const ONE_CHAR_INDENT = FIRST_LINE_INDENT / 2;
+// First-page red-head frames use the type-area top as their vertical anchor.
+// GB/T 9704-2012 7.2.1-7.2.4 then become direct coordinates: the first
+// header line is y=0 and the agency mark begins 35 mm below it. Keeping the
+// paragraph spacing at zero prevents optional left-corner fields from moving
+// the centred mark or changing the preprinted-paper reserve.
+const MM_TO_DXA = 56.692913;
+const HEADER_FIELD_BEFORE = 0;
+const AGENCY_FRAME_BEFORE = 0;
 const AGENCY_FLOW_BEFORE = 1880;
-const HEADER_FIELD_Y = 275;
-const AGENCY_FRAME_Y = 2126;
+const HEADER_FIELD_Y = 0;
+const AGENCY_FRAME_Y = Math.round(35 * MM_TO_DXA);
 
 function installedFontFamilies() {
   try {
@@ -215,7 +219,7 @@ function floatingHeaderFieldParagraph(text, fontPreset, index) {
     fontPreset,
     size: "32",
     before: HEADER_FIELD_BEFORE,
-    frame: { hAnchor: "margin", vAnchor: "page", xAlign: "left", y: HEADER_FIELD_Y + index * 560, w: CONTENT_W, h: 560 },
+    frame: { hAnchor: "margin", vAnchor: "margin", xAlign: "left", y: HEADER_FIELD_Y + index * 560, w: CONTENT_W, h: 560 },
   });
 }
 
@@ -227,7 +231,7 @@ function floatingAgencyMarkParagraph(text) {
     size: "56",
     color: "FF0000",
     before: AGENCY_FRAME_BEFORE,
-    frame: { hAnchor: "margin", vAnchor: "page", xAlign: "center", y: AGENCY_FRAME_Y, w: CONTENT_W, h: 800 },
+    frame: { hAnchor: "margin", vAnchor: "margin", xAlign: "center", y: AGENCY_FRAME_Y, w: CONTENT_W, h: 800 },
   });
 }
 
@@ -270,11 +274,11 @@ function documentNumberParagraph(text, upward = false) {
 }
 
 function upwardHeaderParagraph(docNo, signer) {
-  const tabPosition = CONTENT_W - FIRST_LINE_INDENT;
+  const tabPosition = CONTENT_W - ONE_CHAR_INDENT;
   const signers = String(signer).split(/[、,，;；\s]+/).map((name) => name.trim()).filter(Boolean);
   if (signers.length > 2) throw new Error("upward --signer supports up to two names; use the authority's joint-signature template for more signers");
   const signerRuns = signers.map((name, index) => `${index ? run("　　", { fontPreset: "h2", size: "32" }) : ""}${run(name, { fontPreset: "h2", size: "32" })}`).join("");
-  return `<w:p><w:pPr><w:jc w:val="both"/><w:ind w:left="${FIRST_LINE_INDENT}" w:right="${FIRST_LINE_INDENT}"/><w:tabs><w:tab w:val="right" w:pos="${tabPosition}"/></w:tabs><w:spacing w:before="0" w:after="227" w:line="560" w:lineRule="exact"/><w:adjustRightInd w:val="true"/><w:snapToGrid w:val="true"/><w:kinsoku w:val="true"/></w:pPr>${run(docNo, { fontPreset: "body", size: "32" })}<w:r><w:tab/></w:r>${run("签发人：", { fontPreset: "body", size: "32" })}${signerRuns}</w:p>`;
+  return `<w:p><w:pPr><w:jc w:val="both"/><w:ind w:left="${ONE_CHAR_INDENT}" w:right="${ONE_CHAR_INDENT}"/><w:tabs><w:tab w:val="right" w:pos="${tabPosition}"/></w:tabs><w:spacing w:before="0" w:after="227" w:line="560" w:lineRule="exact"/><w:adjustRightInd w:val="true"/><w:snapToGrid w:val="true"/><w:kinsoku w:val="true"/></w:pPr>${run(docNo, { fontPreset: "body", size: "32" })}<w:r><w:tab/></w:r>${run("签发人：", { fontPreset: "body", size: "32" })}${signerRuns}</w:p>`;
 }
 
 function subtitleParagraph(text) {
@@ -331,6 +335,40 @@ function normalizeAttachmentNote(text) {
   const names = value.replace(/^附件[：:]\s*/, "").trim();
   if (!names) throw new Error("--attachment-note must contain an attachment name after 附件：");
   return `附件：${names}`;
+}
+
+function normalizedAttachmentName(text) {
+  return String(text ?? "")
+    .trim()
+    .replace(/^附件[：:]\s*/, "")
+    .replace(/^附件\s*[一二三四五六七八九十百\d]+\s*[：:]\s*/, "")
+    .replace(/^\d+\s*[.．、]\s*/, "")
+    .replace(/[。；;]+$/, "")
+    .trim();
+}
+
+function attachmentNamesFromNote(text) {
+  return normalizeAttachmentNote(text)
+    .replace(/^附件：/, "")
+    .split(/[；;]/)
+    .map(normalizedAttachmentName)
+    .filter(Boolean);
+}
+
+function attachmentTitleFromFile(filePath) {
+  const blocks = parseMarkdown(fs.readFileSync(filePath, "utf8"));
+  const heading = blocks.find((block) => block.type === "heading");
+  return normalizedAttachmentName(heading?.text ?? path.basename(filePath, path.extname(filePath)));
+}
+
+function validateAttachmentConsistency(note, files) {
+  if (!files.length) return;
+  if (!note) throw new Error("--attachment-file requires --attachment-note so attachment order and titles can be checked");
+  const noted = attachmentNamesFromNote(note);
+  const actual = files.map(attachmentTitleFromFile);
+  if (noted.length !== actual.length || noted.some((name, index) => name !== actual[index])) {
+    throw new Error(`--attachment-note must match attachment titles and order: note=[${noted.join("、")}] files=[${actual.join("、")}]`);
+  }
 }
 
 function h1(text) {
@@ -419,6 +457,11 @@ function headerFieldParagraph(text, fontPreset = "h1", opts = {}) {
   return paragraph(text, { align: opts.align ?? "left", indent: false, fontPreset, size: "32", before: opts.before ?? "0", after: opts.after ?? "0", left: opts.left, right: opts.right });
 }
 
+function letterHeaderRow(leftText, docNo) {
+  const cell = (text, align, fontPreset) => `<w:tc><w:tcPr><w:tcW w:w="4422" w:type="dxa"/><w:tcMar><w:top w:w="0" w:type="dxa"/><w:left w:w="0" w:type="dxa"/><w:bottom w:w="0" w:type="dxa"/><w:right w:w="0" w:type="dxa"/></w:tcMar></w:tcPr>${paragraph(text, { align, indent: false, fontPreset, size: "32", before: "280", after: "0" })}</w:tc>`;
+  return `<w:tbl><w:tblPr><w:tblW w:w="${CONTENT_W}" w:type="dxa"/><w:tblBorders><w:top w:val="nil"/><w:left w:val="nil"/><w:bottom w:val="nil"/><w:right w:val="nil"/><w:insideH w:val="nil"/><w:insideV w:val="nil"/></w:tblBorders><w:tblCellMar><w:top w:w="0" w:type="dxa"/><w:left w:w="0" w:type="dxa"/><w:bottom w:w="0" w:type="dxa"/><w:right w:w="0" w:type="dxa"/></w:tblCellMar></w:tblPr><w:tblGrid><w:gridCol w:w="4422"/><w:gridCol w:w="4422"/></w:tblGrid><w:tr>${cell(leftText, "left", "body")}${cell(docNo, "right", "body")}</w:tr></w:tbl>`;
+}
+
 function attachmentNote(text) {
   return paragraph(normalizeAttachmentNote(text), { align: "left", fontPreset: "body", size: "32", before: "560", firstLine: "-960", left: "1600" });
 }
@@ -431,7 +474,7 @@ function signatureParagraphs(args) {
   if (args["seal-mode"] === "signed") {
     if (!args.signer || !args["signer-title"]) throw new Error("signed seal mode requires --signer and --signer-title");
     const lines = [rightWithIndent(`${args["signer-title"]}  ${args.signer}`, FIRST_LINE_INDENT * 2)];
-    if (args.date) lines.push(rightWithIndent(args.date, FIRST_LINE_INDENT * 2));
+    if (args.date) lines.push(...blankGridLines(1), rightWithIndent(args.date, FIRST_LINE_INDENT * 2));
     return lines;
   }
   if (args["seal-mode"] === "seal") {
@@ -729,6 +772,7 @@ function buildDocument(blocks, args) {
     if (args["copy-no"] && !/^\d{1,6}$/.test(String(args["copy-no"]))) throw new Error("--copy-no must contain one to six Arabic digits");
     let headerFieldIndex = 0;
     if (args["copy-no"]) body.push(floatingHeaderFieldParagraph(String(args["copy-no"]).padStart(6, "0"), "body", headerFieldIndex++));
+    else if (args.secret) body.push(floatingHeaderFieldParagraph("", "body", headerFieldIndex++));
     if (args.secret) body.push(floatingHeaderFieldParagraph(args.secret, "h1", headerFieldIndex++));
     if (args.urgent) body.push(floatingHeaderFieldParagraph(args.urgent, "h1", headerFieldIndex++));
     if (letterhead === "digital" && args.org) {
@@ -754,15 +798,26 @@ function buildDocument(blocks, args) {
     titleGapLines = 2;
   } else if (format === "letter") {
     if (!args.org) throw new Error("letter format requires --org");
+    if (args["copy-no"] && !/^\d{1,6}$/.test(String(args["copy-no"]))) throw new Error("--copy-no must contain one to six Arabic digits");
     body.push(paragraph(args.org, { align: "center", indent: false, fontPreset: "title", size: "44", color: "FF0000", before: "0", after: "227" }));
     body.push(redDoubleRule({ upperMm: "0.35", lowerMm: "0.25" }));
-    if (args["doc-no"]) {
-      args["doc-no"] = normalizeDocumentNumber(args["doc-no"]);
-      body.push(headerFieldParagraph(args["doc-no"], "body", { align: "right", before: "280" }));
+    if (args["doc-no"]) args["doc-no"] = normalizeDocumentNumber(args["doc-no"]);
+    const letterFields = [];
+    if (args["copy-no"]) letterFields.push({ text: String(args["copy-no"]).padStart(6, "0"), fontPreset: "body" });
+    else if (args.secret) letterFields.push({ text: "", fontPreset: "body" });
+    if (args.secret) letterFields.push({ text: args.secret, fontPreset: "h1" });
+    if (args.urgent) letterFields.push({ text: args.urgent, fontPreset: "h1" });
+    if (letterFields.length || args["doc-no"]) {
+      const first = letterFields[0] ?? { text: "", fontPreset: "body" };
+      body.push(letterHeaderRow(first.text, args["doc-no"] ?? ""));
+      for (const field of letterFields.slice(1)) {
+        body.push(headerFieldParagraph(field.text, field.fontPreset));
+      }
     }
     titleGapLines = 2;
   } else if (format === "command") {
     if (!args.org) throw new Error("command format requires --org");
+    if (!/(?:命令|令)$/.test(String(args.org).trim())) throw new Error("command --org must end with“命令”or“令”");
     if (!args["doc-no"]) throw new Error("command format requires --doc-no for the 令号");
     body.push(paragraph(args.org, { align: "center", indent: false, fontPreset: "title", size: "44", color: "FF0000", before: "0", after: "0" }));
     if (args["doc-no"]) {
@@ -801,14 +856,18 @@ function buildDocument(blocks, args) {
     body.push(attachmentNote(args["attachment-note"]));
   }
   if (args.sender || args.date) {
-    body.push(emptyLine());
+    body.push(...(args["seal-mode"] === "signed" ? blankGridLines(2) : [emptyLine()]));
     body.push(...signatureParagraphs(args));
   }
   if (args.note) body.push(paragraph(`（${args.note.replace(/^（|）$/g, "")}）`, { align: "left", fontPreset: "body", size: "32" }));
   const attachmentFiles = Array.isArray(args["attachment-file"]) ? args["attachment-file"] : args["attachment-file"] ? [args["attachment-file"]] : [];
-  attachmentFiles.forEach((filePath, index) => {
+  const absoluteAttachmentFiles = attachmentFiles.map((filePath) => {
     const absolutePath = path.resolve(filePath);
     if (!fs.existsSync(absolutePath)) throw new Error(`attachment file not found: ${filePath}`);
+    return absolutePath;
+  });
+  validateAttachmentConsistency(args["attachment-note"], absoluteAttachmentFiles);
+  absoluteAttachmentFiles.forEach((absolutePath, index) => {
     const attachmentBlocks = parseMarkdown(fs.readFileSync(absolutePath, "utf8"));
     body.push(attachmentPage(attachmentBlocks, index + 1, absolutePath));
   });

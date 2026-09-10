@@ -135,7 +135,8 @@ Windows：
 - [生成器](scripts/generate_gongwen_docx.mjs)：根据输入生成 DOCX 版式。
 - [校验器](scripts/verify_gongwen_docx.mjs)：检查生成器可承诺的 DOCX 版式要素。
 - [回归测试](tests/run_tests.sh)：运行居中与单双页页码生成、DOCX 包结构与 PDF 转换验证。
-- [全条款视觉核验](references/gbt9704-visual-audit.md)：实际生成 12 份 DOCX、渲染 23 张 PNG，并逐条记录截图证据与人工边界。
+- [全条款视觉核验](references/gbt9704-visual-audit.md)：实际生成 13 份 DOCX、渲染 24 张 PNG，并逐条记录截图证据与人工边界。
+- [版头坐标量测](tests/measure-header-coordinates.mjs)：用 PDF 字形坐标独立核对份号首行、机关标志 35 mm 定位及可选字段不移位。
 - [跨平台安装测试](tests/test-install.sh)：隔离环境中验证九个本地目录和 TraeWork 导入包。
 
 ## 验证
