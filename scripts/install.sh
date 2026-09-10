@@ -76,6 +76,7 @@ package_traework() {
   output="$skill_dir/dist/traework-gongwen-skill.zip"
   mkdir -p "$skill_dir/dist" "$stage/gongwen"
   cp -R "$skill_dir/SKILL.md" "$skill_dir/scripts" "$skill_dir/references" "$stage/gongwen/"
+  rm -f "$output"
   (cd "$stage" && zip -qr "$output" gongwen)
   unzip -t "$output" >/dev/null
   rm -rf "$stage"

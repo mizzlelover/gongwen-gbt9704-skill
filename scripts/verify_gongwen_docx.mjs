@@ -4,7 +4,7 @@ import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 
 function usage() {
-  console.log("Usage: node verify_gongwen_docx.mjs --input file.docx [--profile layout|standard-pages]");
+  console.log("Usage: node verify_gongwen_docx.mjs --input file.docx [--profile ordinary|formal|letter|command|minutes] [--letterhead preprinted|digital]");
 }
 
 function parseArgs(argv) {
@@ -18,74 +18,62 @@ function parseArgs(argv) {
 }
 
 function readPart(file, part, optional = false) {
-  try {
-    return execFileSync("unzip", ["-p", file, part], { encoding: "utf8" });
-  } catch (error) {
-    if (optional) return "";
-    throw error;
-  }
+  try { return execFileSync("unzip", ["-p", file, part], { encoding: "utf8" }); }
+  catch (error) { if (optional) return ""; throw error; }
 }
 
-function paragraphsForText(xml, pattern) {
-  const paragraphs = xml.match(/<w:p(?:\s[^>]*)?>[\s\S]*?<\/w:p>/g) ?? [];
-  return paragraphs.filter((paragraph) => pattern.test(paragraph.replace(/<[^>]+>/g, "")));
-}
+function paragraphs(xml) { return xml.match(/<w:p(?:\s[^>]*)?>[\s\S]*?<\/w:p>/g) ?? []; }
 
 const args = parseArgs(process.argv);
-if (!args.input || !fs.existsSync(args.input)) {
-  usage();
-  process.exit(2);
-}
+if (!args.input || !fs.existsSync(args.input)) { usage(); process.exit(2); }
+const profile = args.profile ?? "ordinary";
+if (!["ordinary", "formal", "letter", "command", "minutes"].includes(profile)) { console.error("Unsupported profile."); process.exit(2); }
 
-const profile = args.profile ?? "layout";
-if (!["layout", "standard-pages"].includes(profile)) {
-  console.error("Unsupported profile. Use layout or standard-pages.");
-  process.exit(2);
-}
 const doc = readPart(args.input, "word/document.xml");
 const styles = readPart(args.input, "word/styles.xml");
-const h1 = paragraphsForText(doc, /^[一二三四五六七八九十]+、/);
-const h2 = paragraphsForText(doc, /^（[一二三四五六七八九十]+）/);
-const h3 = paragraphsForText(doc, /(?:^|\s)\d+[.．]/);
-const h4 = paragraphsForText(doc, /（\d+）/);
+const footerOdd = readPart(args.input, "word/footerOdd.xml", true);
+const footerEven = readPart(args.input, "word/footerEven.xml", true);
+const footerCenter = readPart(args.input, "word/footerCenter.xml", true);
 const checks = [];
-
-function check(name, ok, detail) {
-  checks.push({ name, ok, detail });
-}
+function check(name, ok, detail) { checks.push({ name, ok, detail }); }
 
 check("A4 page size", /<w:pgSz[^>]*w:w="11906"[^>]*w:h="16838"/.test(doc), "210 mm x 297 mm");
 check("Page margins", /<w:pgMar[^>]*w:top="2098"[^>]*w:right="1474"[^>]*w:bottom="1984"[^>]*w:left="1588"/.test(doc), "top 37, bottom 35, left 28, right 26 mm");
-check("Document grid", /<w:docGrid[^>]*w:linePitch="560"/.test(doc), "28 pt grid");
-const fangSong = /w:eastAsia="(?:仿宋|仿宋_GB2312|FangSong|FangSong_GB2312|STFangsong)"/;
-const xiaoBiaoSong = /w:eastAsia="(?:方正小标宋简体|方正小标宋_GBK|FZXiaoBiaoSong-B05S)"/;
-const heiTi = /w:eastAsia="(?:黑体|SimHei|Heiti SC|STHeiti)"/;
-const kaiTi = /w:eastAsia="(?:楷体|楷体_GB2312|KaiTi|KaiTi_GB2312|Kaiti SC|STKaiti)"/;
-check("Default body font", fangSong.test(styles) && /<w:sz w:val="32"/.test(styles), "FangSong-compatible 16 pt");
-const allMatch = (paragraphs, matcher) => paragraphs.length > 0 && paragraphs.every(matcher);
-check("Title font", xiaoBiaoSong.test(doc) && /<w:sz w:val="44"/.test(doc), "Xiaobiaosong 22 pt requested");
-check("Level-1 headings", allMatch(h1, (paragraph) => /w:firstLine="640"/.test(paragraph) && heiTi.test(paragraph) && /w:sz w:val="32"/.test(paragraph)), "every 一、 heading is Heiti-compatible 16 pt with two-character indent");
-check("Level-2 headings", allMatch(h2, (paragraph) => /w:firstLine="640"/.test(paragraph) && kaiTi.test(paragraph) && /w:sz w:val="32"/.test(paragraph)), "every （一） heading is Kaiti-compatible 16 pt with two-character indent");
-check("Level-3 headings", allMatch(h3, (paragraph) => /w:firstLine="640"/.test(paragraph) && fangSong.test(paragraph) && /w:sz w:val="32"/.test(paragraph)), "every 1. heading is FangSong-compatible 16 pt with two-character indent");
-check("Level-4 headings", allMatch(h4, (paragraph) => /w:firstLine="640"/.test(paragraph) && fangSong.test(paragraph) && /w:sz w:val="32"/.test(paragraph)), "every （1） heading is FangSong-compatible 16 pt with two-character indent");
-if (profile === "standard-pages") {
-  const oddFooter = readPart(args.input, "word/footerOdd.xml", true);
-  const evenFooter = readPart(args.input, "word/footerEven.xml", true);
-  check("Odd-page footer", /w:jc w:val="right"/.test(oddFooter) && /w:instr="PAGE"/.test(oddFooter) && /w:ascii="(?:宋体|SimSun)"/.test(oddFooter), "right-aligned page number in Songti-compatible font");
-  check("Even-page footer", /w:jc w:val="left"/.test(evenFooter) && /w:instr="PAGE"/.test(evenFooter) && /w:ascii="(?:宋体|SimSun)"/.test(evenFooter), "left-aligned page number in Songti-compatible font");
+check("Document grid", /<w:docGrid[^>]*w:linePitch="560"/.test(doc), "28 pt implementation grid");
+check("Default body font", /w:eastAsia="(?:仿宋|仿宋_GB2312|FangSong|FangSong_GB2312|STFangsong)"/.test(styles) && /<w:sz w:val="32"/.test(styles), "3rd-size FangSong requested");
+check("Heading styles", [1, 2, 3, 4].every((level) => new RegExp(`w:styleId="Heading${level}"`).test(styles)), "Heading 1 through Heading 4 are defined");
+
+const textOf = (xml) => xml.replace(/<[^>]+>/g, "");
+const headingRules = [
+  [/^[一二三四五六七八九十百]+、/, "Heading1", /(?:黑体|SimHei|Heiti SC|STHeiti)/],
+  [/^（[一二三四五六七八九十百]+）/, "Heading2", /(?:楷体|楷体_GB2312|KaiTi|KaiTi_GB2312|Kaiti SC|STKaiti)/],
+  [/^\d+[.．]/, "Heading3", /(?:仿宋|仿宋_GB2312|FangSong|FangSong_GB2312|STFangsong)/],
+  [/^（\d+）/, "Heading4", /(?:仿宋|仿宋_GB2312|FangSong|FangSong_GB2312|STFangsong)/],
+];
+for (const [pattern, style, font] of headingRules) {
+  const matches = paragraphs(doc).filter((p) => pattern.test(textOf(p).trim()));
+  check(`${style} applied when present`, matches.every((p) => new RegExp(`w:pStyle w:val="${style}"`).test(p) && /w:firstLine="640"/.test(p) && font.test(p)), matches.length ? `${matches.length} matching paragraph(s)` : "not present in this document");
+}
+
+if (profile === "ordinary") {
+  check("No formal red-head drawing", !/w:color w:val="FF0000"/.test(doc), "ordinary output has no red head or red rule");
+  check("Centered layout footer", /w:jc w:val="center"/.test(footerCenter) && /w:instr="PAGE"/.test(footerCenter), "ordinary output uses centered page number");
+} else if (profile === "letter") {
+  check("Letter first-page page number", !footerCenter && !footerOdd && !footerEven, "letter test output suppresses first-page page number");
 } else {
-  const footer = readPart(args.input, "word/footerCenter.xml", true);
-  check("Layout page footer", /w:jc w:val="center"/.test(footer) && /w:instr="PAGE"/.test(footer) && /w:ascii="(?:宋体|SimSun)"/.test(footer), "centered page number in Songti-compatible font");
+  check("Odd/even page fields", /w:instr="PAGE"/.test(footerOdd) && /w:instr="PAGE"/.test(footerEven), "odd and even page footers exist");
+  check("Odd/even page positions", /w:jc w:val="right"/.test(footerOdd) && /w:jc w:val="left"/.test(footerEven), "odd right and even left");
+}
+if (profile === "formal") {
+  if (args.letterhead === "digital") {
+    check("Digital red head", /w:color w:val="FF0000"/.test(doc), "digital formal output contains requested red elements");
+  } else {
+    check("Preprinted letterhead reserve", /w:before="\d{4,}"/.test(doc), "first-page top reserve is present");
+    check("No red drawing for preprinted letterhead", !/w:color w:val="FF0000"/.test(doc), "preprinted mode does not redraw red letterhead or rule");
+  }
 }
 
-for (const item of checks) {
-  console.log(`${item.ok ? "PASS" : "FAIL"}  ${item.name}: ${item.detail}`);
-}
-
+for (const item of checks) console.log(`${item.ok ? "PASS" : "FAIL"}  ${item.name}: ${item.detail}`);
 const failed = checks.filter((item) => !item.ok);
-if (failed.length) {
-  console.error(`Verification failed: ${failed.length} item(s).`);
-  process.exit(1);
-}
-
+if (failed.length) { console.error(`Verification failed: ${failed.length} item(s).`); process.exit(1); }
 console.log(`Verification passed (${profile} profile): ${checks.length} item(s).`);

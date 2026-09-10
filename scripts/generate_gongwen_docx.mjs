@@ -32,7 +32,7 @@ function preferredFont(candidates) {
 const FONT = {
   title: { eastAsia: preferredFont(["方正小标宋简体", "方正小标宋_GBK", "FZXiaoBiaoSong-B05S"]), ascii: "Times New Roman", cs: "Times New Roman" },
   subtitle: { eastAsia: preferredFont(["仿宋", "仿宋_GB2312", "STFangsong"]), ascii: "Times New Roman", cs: "Times New Roman" },
-  body: { eastAsia: preferredFont(["仿宋", "仿宋_GB2312", "STFangsong"]), ascii: "Times New Roman", cs: "Times New Roman" },
+  body: { eastAsia: preferredFont(["仿宋", "仿宋_GB2312", "FangSong", "FangSong_GB2312", "STFangsong"]), ascii: "Times New Roman", cs: "Times New Roman" },
   h1: { eastAsia: preferredFont(["黑体", "SimHei", "Heiti SC", "STHeiti"]), ascii: "Times New Roman", cs: "Times New Roman" },
   h2: { eastAsia: preferredFont(["楷体", "楷体_GB2312", "KaiTi", "Kaiti SC", "STKaiti"]), ascii: "Times New Roman", cs: "Times New Roman" },
   song: { eastAsia: preferredFont(["宋体", "SimSun"]), ascii: "宋体", cs: "宋体" },
@@ -40,11 +40,13 @@ const FONT = {
 
 function usage() {
   console.log(`Usage:
-  node generate_gongwen_docx.mjs --input source.md --output out.docx [--org 发文机关] [--doc-no 发文字号] [--title 标题] [--subtitle 副标题] [--to 主送机关] [--sender 落款] [--date 日期] [--page-number center|standard|none]
+  node generate_gongwen_docx.mjs --input source.md --output out.docx [--format ordinary|formal|letter|command|minutes] [--letterhead preprinted|digital] [--org 发文机关] [--doc-no 发文字号] [--title 标题] [--subtitle 副标题] [--to 主送机关] [--sender 落款] [--date 日期] [--page-number center|standard|none]
 
 Notes:
   - Converts Markdown to a GB/T 9704-2012 page-layout DOCX.
-  - Generates a DOCX from the supplied content and formatting fields. Its default page number is centered; use standard for odd/even page-number placement or none to suppress it.
+  - ordinary is the default for reports, plans and other editable materials. It never creates a red header from --org alone.
+  - formal is used only when a formal issuing-document layout is explicitly requested. It defaults to preprinted letterhead: red elements are reserved, not redrawn. Use --letterhead digital only for a complete electronic red-head layout.
+  - letter, command and minutes use their dedicated national-standard layout branches. Their required fields must be supplied explicitly.
   - --org and --doc-no are printed exactly as supplied. The tool formats document content; it does not infer missing information or decide the document's use.
   - Supports headings, paragraphs, ordered/unordered lines, and pipe tables.
   - No npm dependencies; requires zip in PATH.`);
@@ -112,7 +114,10 @@ function paragraph(text, opts = {}) {
   const keepNext = opts.keepNext ? "<w:keepNext/>" : "";
   const before = opts.before ?? "0";
   const after = opts.after ?? "0";
-  const pPr = `<w:pPr>${keepNext}${align}${indent}<w:spacing w:before="${before}" w:after="${after}" w:line="560" w:lineRule="exact"/><w:adjustRightInd w:val="true"/><w:snapToGrid w:val="true"/><w:kinsoku w:val="true"/></w:pPr>`;
+  const style = opts.style ? `<w:pStyle w:val="${attr(opts.style)}"/>` : "";
+  const outline = opts.outlineLevel === undefined ? "" : `<w:outlineLvl w:val="${opts.outlineLevel}"/>`;
+  const pageBreak = opts.pageBreakBefore ? "<w:pageBreakBefore/>" : "";
+  const pPr = `<w:pPr>${style}${keepNext}${pageBreak}${align}${indent}${outline}<w:spacing w:before="${before}" w:after="${after}" w:line="560" w:lineRule="exact"/><w:adjustRightInd w:val="true"/><w:snapToGrid w:val="true"/><w:kinsoku w:val="true"/></w:pPr>`;
   return `<w:p>${pPr}${run(text, opts)}</w:p>`;
 }
 
@@ -124,6 +129,7 @@ function titleParagraph(text) {
     size: "44",
     before: "0",
     after: "560",
+    style: "GongwenTitle",
   });
 }
 
@@ -134,17 +140,19 @@ function agencyMarkParagraph(text) {
     fontPreset: "title",
     size: "56",
     color: "FF0000",
-    after: "280",
+    after: "560",
+    before: "5953",
   });
 }
 
-function documentNumberParagraph(text) {
+function documentNumberParagraph(text, upward = false) {
   return paragraph(text, {
-    align: "left",
+    align: upward ? "left" : "center",
     indent: false,
     fontPreset: "body",
     size: "32",
-    after: "160",
+    after: "227",
+    left: upward ? FIRST_LINE_INDENT : undefined,
   });
 }
 
@@ -175,6 +183,8 @@ function h1(text) {
     keepNext: true,
     before: "160",
     after: "0",
+    style: "Heading1",
+    outlineLevel: 0,
   });
 }
 
@@ -186,6 +196,8 @@ function h2(text) {
     keepNext: true,
     before: "80",
     after: "0",
+    style: "Heading2",
+    outlineLevel: 1,
   });
 }
 
@@ -197,6 +209,8 @@ function h3(text) {
     keepNext: true,
     before: "40",
     after: "0",
+    style: "Heading3",
+    outlineLevel: 2,
   });
 }
 
@@ -208,11 +222,39 @@ function h4(text) {
     keepNext: true,
     before: "0",
     after: "0",
+    style: "Heading4",
+    outlineLevel: 3,
   });
 }
 
 function right(text) {
   return paragraph(text, { align: "right", indent: false, right: FIRST_LINE_INDENT });
+}
+
+function redRule(thickness = "8") {
+  return `<w:p><w:pPr><w:spacing w:before="0" w:after="0" w:line="80" w:lineRule="exact"/></w:pPr><w:r><w:rPr><w:color w:val="FF0000"/></w:rPr><w:pict><v:rect xmlns:v="urn:schemas-microsoft-com:vml" style="width:156mm;height:${thickness === "8" ? "0.8mm" : "0.35mm"}" fillcolor="#FF0000" stroked="f"/></w:pict></w:r></w:p>`;
+}
+
+function headerFieldParagraph(text, fontPreset = "h1", opts = {}) {
+  return paragraph(text, { align: opts.align ?? "left", indent: false, fontPreset, size: "32", after: opts.after ?? "0", left: opts.left, right: opts.right });
+}
+
+function attachmentNote(text) {
+  return paragraph(`附件：${text}`, { align: "left", fontPreset: "body", size: "32", before: "560", firstLine: FIRST_LINE_INDENT, left: "0" });
+}
+
+function colophon(args) {
+  if (!args["cc"] && !args["print-org"] && !args["print-date"]) return [];
+  const body = [redRule("4")];
+  if (args.cc) body.push(paragraph(`抄送：${args.cc.replace(/[。.]?$/, "")}。`, { align: "left", indent: false, left: "320", right: "320", fontPreset: "body", size: "28" }));
+  if (args.cc) body.push(redRule("2"));
+  if (args["print-org"] || args["print-date"]) {
+    const left = args["print-org"] ?? "";
+    const rightValue = args["print-date"] ? `${args["print-date"].replace(/印发$/, "")}印发` : "";
+    body.push(`<w:p><w:pPr><w:jc w:val="both"/><w:ind w:left="320" w:right="320"/><w:spacing w:before="0" w:after="0" w:line="560" w:lineRule="exact"/></w:pPr>${run(left, { fontPreset: "body", size: "28" })}<w:r><w:tab/></w:r>${run(rightValue, { fontPreset: "body", size: "28" })}</w:p>`);
+  }
+  body.push(redRule("4"));
+  return body;
 }
 
 function emptyLine() {
@@ -371,16 +413,20 @@ function renderHeading(block) {
 function renderParagraph(block) {
   if (isFirstLayerHeadingText(block.text)) return h1(block.text);
   if (isSecondLayerHeadingText(block.text)) return h2(block.text);
+  if (isThirdLayerHeadingText(block.text)) return h3(block.text);
+  if (isFourthLayerHeadingText(block.text)) return h4(block.text);
   return paragraph(block.text);
 }
 
 function buildDocument(blocks, args) {
   let title = args.title;
+  const format = ["ordinary", "formal", "letter", "command", "minutes"].includes(args.format) ? args.format : "ordinary";
+  const letterhead = args.letterhead === "digital" ? "digital" : "preprinted";
   const pageNumberMode = args["no-page-number"] || args["no-page-numbers"]
     ? "none"
     : ["center", "standard", "none"].includes(args["page-number"])
       ? args["page-number"]
-      : "center";
+      : format === "formal" || format === "letter" || format === "command" || format === "minutes" ? "standard" : "center";
   const body = [];
   const sourceBlocks = [...blocks];
   if (!title && sourceBlocks[0]?.type === "heading") {
@@ -395,8 +441,36 @@ function buildDocument(blocks, args) {
   if (!mainSend && sourceBlocks[0]?.type === "paragraph" && looksLikeMainSend(sourceBlocks[0].text)) {
     mainSend = sourceBlocks.shift().text;
   }
-  if (args.org) body.push(agencyMarkParagraph(args.org));
-  if (args["doc-no"]) body.push(documentNumberParagraph(args["doc-no"]));
+  const upward = args["upward"] === "true" || args["upward"] === true;
+  const formal = format === "formal";
+  if (formal) {
+    if (args["copy-no"]) body.push(headerFieldParagraph(String(args["copy-no"]).padStart(6, "0"), "body"));
+    if (args.secret) body.push(headerFieldParagraph(args.secret));
+    if (args.urgent) body.push(headerFieldParagraph(args.urgent));
+    if (letterhead === "digital" && args.org) body.push(agencyMarkParagraph(args.org));
+    if (letterhead === "preprinted") {
+      const reserve = Number(args["letterhead-reserve-mm"] ?? 72);
+      if (!Number.isFinite(reserve) || reserve < 37 || reserve > 130) throw new Error("--letterhead-reserve-mm must be between 37 and 130");
+      body.push(paragraph("", { indent: false, before: String(Math.round((reserve - 37) * 56.7)), after: "0", fontPreset: "body" }));
+    }
+    if (args["doc-no"]) body.push(documentNumberParagraph(args["doc-no"], upward));
+    if (upward && args.signer) {
+      body.push(headerFieldParagraph(`签发人：${args.signer}`, "h2", { align: "right", right: FIRST_LINE_INDENT }));
+    }
+    if (letterhead === "digital" || args["preprinted-rule"] === "true") body.push(redRule());
+  } else if (format === "letter") {
+    if (!args.org) throw new Error("letter format requires --org");
+    body.push(paragraph(args.org, { align: "center", indent: false, fontPreset: "title", size: "44", color: "FF0000", before: "4252", after: "227" }));
+    body.push(redRule());
+    if (args["doc-no"]) body.push(headerFieldParagraph(args["doc-no"], "body", { align: "right" }));
+  } else if (format === "command") {
+    if (!args.org) throw new Error("command format requires --org");
+    body.push(paragraph(args.org, { align: "center", indent: false, fontPreset: "title", size: "44", color: "FF0000", before: "3402", after: "560" }));
+    if (args["doc-no"]) body.push(paragraph(args["doc-no"], { align: "center", indent: false, fontPreset: "body", size: "32", after: "560" }));
+  } else if (format === "minutes") {
+    if (!args.org) throw new Error("minutes format requires --org (for XXXXX纪要)");
+    body.push(paragraph(args.org, { align: "center", indent: false, fontPreset: "title", size: "44", color: "FF0000", before: "5953", after: "560" }));
+  }
   if (title) body.push(titleParagraph(title));
   if (args.subtitle) body.push(subtitleParagraph(args.subtitle));
   if (mainSend) body.push(mainSendParagraph(mainSend));
@@ -413,22 +487,39 @@ function buildDocument(blocks, args) {
     }
     body.push(renderParagraph(block));
   }
+  if (args["attachment-note"]) body.push(attachmentNote(args["attachment-note"]));
   if (args.sender || args.date) {
     body.push(emptyLine());
-    if (args.sender) body.push(right(args.sender));
-    if (args.date) body.push(right(args.date));
+    if (args["seal-mode"] === "signed") {
+      if (!args.signer || !args["signer-title"]) throw new Error("signed seal mode requires --signer and --signer-title");
+      body.push(right(`${args["signer-title"]}  ${args.signer}`));
+      if (args.date) body.push(right(args.date));
+    } else if (args["seal-mode"] === "seal") {
+      if (args.sender) body.push(right(args.sender));
+      if (args.date) body.push(right(args.date));
+    } else {
+      if (args.sender) body.push(right(args.sender));
+      if (args.date) body.push(right(args.date));
+    }
   }
+  if (args.note) body.push(paragraph(`（${args.note.replace(/^（|）$/g, "")}）`, { align: "left", fontPreset: "body", size: "32" }));
+  if (format === "minutes" && args.attendees) body.push(paragraph(`出席：${args.attendees}`, { align: "left", fontPreset: "body", size: "32", before: "560" }));
+  if (format === "minutes" && args.absent) body.push(paragraph(`请假：${args.absent}`, { align: "left", fontPreset: "body", size: "32" }));
+  if (format === "minutes" && args.observers) body.push(paragraph(`列席：${args.observers}`, { align: "left", fontPreset: "body", size: "32" }));
+  if (format !== "letter") body.push(...colophon(args));
   const footerRefs = pageNumberMode === "standard"
     ? '<w:footerReference w:type="default" r:id="rIdFooterOdd"/><w:footerReference w:type="even" r:id="rIdFooterEven"/>'
     : pageNumberMode === "center"
       ? '<w:footerReference w:type="default" r:id="rIdFooterCenter"/>'
       : "";
   body.push(`<w:sectPr>${footerRefs}<w:pgSz w:w="${PAGE_W}" w:h="${PAGE_H}"/><w:pgMar w:top="${MARGIN.top}" w:right="${MARGIN.right}" w:bottom="${MARGIN.bottom}" w:left="${MARGIN.left}" w:header="720" w:footer="1588" w:gutter="0"/><w:docGrid w:type="lines" w:linePitch="560"/></w:sectPr>`);
-  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><w:body>${body.join("")}</w:body></w:document>`;
+  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:v="urn:schemas-microsoft-com:vml"><w:body>${body.join("")}</w:body></w:document>`;
 }
 
 function stylesXml() {
-  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:docDefaults><w:rPrDefault><w:rPr><w:rFonts ${fontAttrs({ fontPreset: "body" })}/><w:color w:val="000000"/><w:sz w:val="32"/><w:szCs w:val="32"/><w:lang w:val="en-US" w:eastAsia="zh-CN"/></w:rPr></w:rPrDefault><w:pPrDefault><w:pPr><w:spacing w:before="0" w:after="0" w:line="560" w:lineRule="exact"/><w:adjustRightInd w:val="true"/><w:snapToGrid w:val="true"/><w:kinsoku w:val="true"/></w:pPr></w:pPrDefault></w:docDefaults><w:style w:type="paragraph" w:default="1" w:styleId="Normal"><w:name w:val="Normal"/><w:qFormat/><w:rPr><w:rFonts ${fontAttrs({ fontPreset: "body" })}/><w:sz w:val="32"/><w:szCs w:val="32"/><w:lang w:val="en-US" w:eastAsia="zh-CN"/></w:rPr></w:style></w:styles>`;
+  const style = (id, name, preset, size, outline, before = "0") => `<w:style w:type="paragraph" w:customStyle="1" w:styleId="${id}"><w:name w:val="${name}"/><w:basedOn w:val="Normal"/><w:next w:val="Normal"/><w:qFormat/><w:pPr><w:keepNext/><w:ind w:firstLine="640"/><w:outlineLvl w:val="${outline}"/><w:spacing w:before="${before}" w:after="0" w:line="560" w:lineRule="exact"/></w:pPr><w:rPr><w:rFonts ${fontAttrs({ fontPreset: preset })}/><w:color w:val="000000"/><w:sz w:val="${size}"/><w:szCs w:val="${size}"/><w:lang w:val="en-US" w:eastAsia="zh-CN"/></w:rPr></w:style>`;
+  const title = `<w:style w:type="paragraph" w:customStyle="1" w:styleId="GongwenTitle"><w:name w:val="公文标题"/><w:basedOn w:val="Normal"/><w:next w:val="Normal"/><w:qFormat/><w:pPr><w:jc w:val="center"/><w:spacing w:before="0" w:after="560" w:line="560" w:lineRule="exact"/></w:pPr><w:rPr><w:rFonts ${fontAttrs({ fontPreset: "title" })}/><w:sz w:val="44"/><w:szCs w:val="44"/></w:rPr></w:style>`;
+  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:docDefaults><w:rPrDefault><w:rPr><w:rFonts ${fontAttrs({ fontPreset: "body" })}/><w:color w:val="000000"/><w:sz w:val="32"/><w:szCs w:val="32"/><w:lang w:val="en-US" w:eastAsia="zh-CN"/></w:rPr></w:rPrDefault><w:pPrDefault><w:pPr><w:spacing w:before="0" w:after="0" w:line="560" w:lineRule="exact"/><w:adjustRightInd w:val="true"/><w:snapToGrid w:val="true"/><w:kinsoku w:val="true"/></w:pPr></w:pPrDefault></w:docDefaults><w:style w:type="paragraph" w:default="1" w:styleId="Normal"><w:name w:val="Normal"/><w:qFormat/><w:rPr><w:rFonts ${fontAttrs({ fontPreset: "body" })}/><w:sz w:val="32"/><w:szCs w:val="32"/><w:lang w:val="en-US" w:eastAsia="zh-CN"/></w:rPr></w:style>${title}${style("Heading1", "标题 1", "h1", "32", 0, "160")}${style("Heading2", "标题 2", "h2", "32", 1, "80")}${style("Heading3", "标题 3", "body", "32", 2, "40")}${style("Heading4", "标题 4", "body", "32", 3)}</w:styles>`;
 }
 
 function fontDef(name, altName, family = "roman", charset = "86") {

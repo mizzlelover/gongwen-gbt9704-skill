@@ -75,21 +75,32 @@ https://std.samr.gov.cn/gb/search/gbDetailed?id=lOIe27f77QU%3D&mode=p
 | 场景 | 本项目的处理方式 |
 | --- | --- |
 | 文档主体 | A4、版心、标题、正文、层次、署名和日期排版 |
-| 机构名称与文号 | 使用 `--org`、`--doc-no` 按输入排版 |
+| 普通报告、方案、汇报 | 默认 `ordinary`，不因机构名称自动使用红头 |
+| 正式发文与红头纸 | 显式 `formal`；默认预印红头纸套打，首面留白、不重绘红色机关标志和红线 |
+| 完整电子红头 | 显式 `formal --letterhead digital`，才在 DOCX 中绘制红头要素 |
+| 机构名称与文号 | 使用 `--org`、`--doc-no` 按输入排版；文号仅在相应版式中定位 |
+| 标题与目录 | 四级标题写入 Word/WPS 标题样式及大纲级别，可插入自动目录 |
 | 页码 | 居中、单双页或不显示 |
 | 印章、签名章 | 在生成的 DOCX 中按实际需要插入图片或完成实体盖章 |
-| 特定格式 | 可在此版式基础上继续编辑，或使用对应模板 |
+| 特定格式 | `letter`、`command`、`minutes` 使用对应生成分支 |
 
 GB/T 9704-2012 当前为现行标准，2025-05-30 复审继续有效。标准适用于党政机关制发公文，其他机关和单位可以参照执行。[全国标准信息公共服务平台](https://std.samr.gov.cn/gb/search/gbDetailed?id=lOIe27f77QU%3D&mode=p)
 
 ## 快速开始
 
 ```bash
-node scripts/generate_gongwen_docx.mjs --input tests/fixture.md --output /tmp/gongwen.docx --org "示例单位文件" --doc-no "示例发〔2026〕1号" --title "公文格式回归测试" --page-number standard
-node scripts/verify_gongwen_docx.mjs --input /tmp/gongwen.docx --profile standard-pages
+node scripts/generate_gongwen_docx.mjs --input tests/fixture.md --output /tmp/gongwen.docx --format ordinary --title "公文格式回归测试"
+node scripts/verify_gongwen_docx.mjs --input /tmp/gongwen.docx --profile ordinary
 ```
 
-然后用 Word 或 WPS 打开，并转换 PDF 检查标题、正文、表格、分页和页码。生成器支持 `center`、`standard` 和 `none` 页码模式，机构名称和文号按输入写入文档。
+需要正式发文时，必须明确选择版式。下面的命令生成预印红头纸套打稿；首页只留出纸上已有红头和红线区域，DOCX 不会重绘它们。`72` 是默认预留高度，应按本单位实际红头纸改为 `37—130` 毫米。
+
+```bash
+node scripts/generate_gongwen_docx.mjs --input tests/fixture.md --output /tmp/formal.docx --format formal --letterhead preprinted --letterhead-reserve-mm 72 --org "示例单位文件" --doc-no "示例发〔2026〕1号" --title "公文格式回归测试"
+node scripts/verify_gongwen_docx.mjs --input /tmp/formal.docx --profile formal --letterhead preprinted
+```
+
+只有需要完整电子红头文件时，才加 `--letterhead digital`。打开文档后，Word/WPS 的“引用→目录”可以按“标题1—标题4”生成并更新目录；是否显示第四级，在目录设置中选择。
 
 ## 跨平台安装
 
