@@ -9,6 +9,14 @@ const PAGE_H = 16838;
 const MARGIN = { top: 2098, bottom: 1984, left: 1588, right: 1474 };
 const CONTENT_W = PAGE_W - MARGIN.left - MARGIN.right;
 const FIRST_LINE_INDENT = 640;
+// Word frame coordinates are relative to the type-area margin in the Office
+// and LibreOffice renderers used by this skill. These values keep first-page
+// header fields and the centered agency mark independent of one another.
+const HEADER_FIELD_BEFORE = 1760;
+const AGENCY_FRAME_BEFORE = 2015;
+const AGENCY_FLOW_BEFORE = 1880;
+const HEADER_FIELD_Y = 275;
+const AGENCY_FRAME_Y = 2126;
 
 function installedFontFamilies() {
   try {
@@ -181,9 +189,10 @@ function paragraph(text, opts = {}) {
   const lineRule = opts.lineRule ?? "exact";
   const style = opts.style ? `<w:pStyle w:val="${attr(opts.style)}"/>` : "";
   const outline = opts.outlineLevel === undefined ? "" : `<w:outlineLvl w:val="${opts.outlineLevel}"/>`;
+  const frame = opts.frame ? `<w:framePr w:wrap="none" w:hAnchor="${attr(opts.frame.hAnchor ?? "page")}" w:vAnchor="${attr(opts.frame.vAnchor ?? "page")}"${opts.frame.xAlign ? ` w:xAlign="${attr(opts.frame.xAlign)}"` : ` w:x="${attr(opts.frame.x ?? 0)}"`} w:y="${attr(opts.frame.y ?? 0)}" w:w="${attr(opts.frame.w ?? CONTENT_W)}" w:h="${attr(opts.frame.h ?? 560)}"/>` : "";
   const pageBreak = opts.pageBreakBefore ? "<w:pageBreakBefore/>" : "";
   const snapToGrid = opts.snapToGrid === false ? "<w:snapToGrid w:val=\"false\"/>" : "<w:snapToGrid w:val=\"true\"/>";
-  const pPr = `<w:pPr>${style}${keepNext}${pageBreak}${align}${indent}${outline}<w:spacing w:before="${before}" w:after="${after}" w:line="${line}" w:lineRule="${lineRule}"/><w:adjustRightInd w:val="true"/>${snapToGrid}<w:kinsoku w:val="true"/></w:pPr>`;
+  const pPr = `<w:pPr>${style}${keepNext}${pageBreak}${frame}${align}${indent}${outline}<w:spacing w:before="${before}" w:after="${after}" w:line="${line}" w:lineRule="${lineRule}"/><w:adjustRightInd w:val="true"/>${snapToGrid}<w:kinsoku w:val="true"/></w:pPr>`;
   return `<w:p>${pPr}${run(text, opts)}</w:p>`;
 }
 
@@ -199,15 +208,39 @@ function titleParagraph(text, before = "0") {
   });
 }
 
-function agencyMarkParagraph(text, before = "0", after = "0") {
+function floatingHeaderFieldParagraph(text, fontPreset, index) {
+  return paragraph(text, {
+    align: "left",
+    indent: false,
+    fontPreset,
+    size: "32",
+    before: HEADER_FIELD_BEFORE,
+    frame: { hAnchor: "margin", vAnchor: "page", xAlign: "left", y: HEADER_FIELD_Y + index * 560, w: CONTENT_W, h: 560 },
+  });
+}
+
+function floatingAgencyMarkParagraph(text) {
   return paragraph(text, {
     align: "center",
     indent: false,
     fontPreset: "title",
     size: "56",
     color: "FF0000",
-    after,
-    before,
+    before: AGENCY_FRAME_BEFORE,
+    frame: { hAnchor: "margin", vAnchor: "page", xAlign: "center", y: AGENCY_FRAME_Y, w: CONTENT_W, h: 800 },
+  });
+}
+
+function agencyMarkFlowSpacer() {
+  return paragraph("\u00a0", {
+    align: "left",
+    indent: false,
+    fontPreset: "body",
+    size: "2",
+    line: "560",
+    snapToGrid: false,
+    before: AGENCY_FLOW_BEFORE,
+    after: "0",
   });
 }
 
@@ -377,7 +410,9 @@ function redDoubleRule({ upperMm = "0.35", lowerMm = "0.25", widthMm = "170" } =
 }
 
 function minutesPersonParagraph(label, people, before = "0") {
-  return `<w:p><w:pPr><w:jc w:val="left"/><w:ind w:firstLine="0"/><w:spacing w:before="${before}" w:after="0" w:line="560" w:lineRule="exact"/><w:adjustRightInd w:val="true"/><w:snapToGrid w:val="true"/><w:kinsoku w:val="true"/></w:pPr>${run(`${label}：`, { fontPreset: "h1", size: "32" })}${run(people, { fontPreset: "body", size: "32" })}</w:p>`;
+  // The label starts two characters into the type area; wrapped names align
+  // after the four-character label “出席：/请假：/列席：”.
+  return `<w:p><w:pPr><w:jc w:val="left"/><w:ind w:firstLine="-1280" w:left="1920"/><w:spacing w:before="${before}" w:after="0" w:line="560" w:lineRule="exact"/><w:adjustRightInd w:val="true"/><w:snapToGrid w:val="true"/><w:kinsoku w:val="true"/></w:pPr>${run(`${label}：`, { fontPreset: "h1", size: "32" })}${run(people, { fontPreset: "body", size: "32" })}</w:p>`;
 }
 
 function headerFieldParagraph(text, fontPreset = "h1", opts = {}) {
@@ -558,7 +593,7 @@ function parseMarkdown(md) {
 }
 
 function normalizeSignatureText(text) {
-  return String(text ?? "").replace(/\s+/g, "");
+  return String(text ?? "").replace(/\s+/g, "").replace(/[：:]$/, "");
 }
 
 function isMatchingParagraph(block, text) {
@@ -691,19 +726,26 @@ function buildDocument(blocks, args) {
   const formal = format === "formal";
   if (formal) {
     if (letterhead === "digital" && !args.org) throw new Error("formal digital letterhead requires --org");
-    const headerFieldCount = [args["copy-no"], args.secret, args.urgent].filter(Boolean).length;
     if (args["copy-no"] && !/^\d{1,6}$/.test(String(args["copy-no"]))) throw new Error("--copy-no must contain one to six Arabic digits");
-    if (args["copy-no"]) body.push(headerFieldParagraph(String(args["copy-no"]).padStart(6, "0"), "body"));
-    if (args.secret) body.push(headerFieldParagraph(args.secret));
-    if (args.urgent) body.push(headerFieldParagraph(args.urgent));
+    let headerFieldIndex = 0;
+    if (args["copy-no"]) body.push(floatingHeaderFieldParagraph(String(args["copy-no"]).padStart(6, "0"), "body", headerFieldIndex++));
+    if (args.secret) body.push(floatingHeaderFieldParagraph(args.secret, "h1", headerFieldIndex++));
+    if (args.urgent) body.push(floatingHeaderFieldParagraph(args.urgent, "h1", headerFieldIndex++));
     if (letterhead === "digital" && args.org) {
-      body.push(agencyMarkParagraph(args.org, String(Math.max(0, 1984 - headerFieldCount * 560)), "0"));
+      // GB/T 9704-2012 7.2.4 fixes the agency mark at 35 mm below the
+      // type-area top. Left-corner fields occupy their own column and must
+      // not move the centered mark upward.
+      body.push(floatingAgencyMarkParagraph(args.org));
+      body.push(agencyMarkFlowSpacer());
       if (args["doc-no"]) body.push(...blankGridLines(2));
     }
     if (letterhead === "preprinted") {
       const reserve = Number(args["letterhead-reserve-mm"] ?? 72);
       if (!Number.isFinite(reserve) || reserve < 37 || reserve > 130) throw new Error("--letterhead-reserve-mm must be between 37 and 130");
-      body.push(letterheadReserveParagraph(Math.max(37, reserve - headerFieldCount * 9.877)));
+      // The physical red-head paper already contains the agency mark and
+      // separator. Its reserve is a paper-coordinate boundary, so optional
+      // copy/secret/urgency fields must not shorten it.
+      body.push(letterheadReserveParagraph(reserve));
     }
     if (args["doc-no"]) args["doc-no"] = normalizeDocumentNumber(args["doc-no"]);
     if (upward && args["doc-no"] && args.signer) body.push(upwardHeaderParagraph(args["doc-no"], args.signer));

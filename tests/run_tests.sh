@@ -31,14 +31,32 @@ unzip -p "$TMP_DIR/standard.docx" word/document.xml | grep -q 'w:snapToGrid w:va
 unzip -p "$TMP_DIR/digital.docx" word/document.xml | grep -q '示例单位文件'
 unzip -p "$TMP_DIR/digital.docx" word/document.xml | grep -q 'FF0000'
 unzip -p "$TMP_DIR/digital.docx" word/document.xml | grep -q 'height:0.5mm'
-unzip -p "$TMP_DIR/digital.docx" word/document.xml | grep -q 'w:before="1984"'
+unzip -p "$TMP_DIR/digital.docx" word/document.xml | grep -q 'w:framePr.*w:xAlign="center".*w:y="2126"'
+unzip -p "$TMP_DIR/digital.docx" word/document.xml | grep -q 'w:before="2015"'
 unzip -p "$TMP_DIR/digital.docx" word/document.xml | grep -q 'w:snapToGrid w:val="false"'
+
+"$NODE" "$GEN" --input "$FIXTURE" --output "$TMP_DIR/digital-fields.docx" --format formal --letterhead digital --copy-no 7 --secret "机密★3年" --urgent "特急" --org "示例单位文件" --doc-no "示例发〔2026〕3号" --title "版头字段定位测试"
+"$NODE" "$VERIFY" --input "$TMP_DIR/digital-fields.docx" --profile formal --letterhead digital
+unzip -p "$TMP_DIR/digital-fields.docx" word/document.xml | grep -q 'w:framePr.*w:xAlign="left".*w:y="275"'
+unzip -p "$TMP_DIR/digital-fields.docx" word/document.xml | grep -q 'w:before="2015"'
+
+"$NODE" "$GEN" --input "$FIXTURE" --output "$TMP_DIR/preprinted-fields.docx" --format formal --letterhead preprinted --letterhead-reserve-mm 72 --copy-no 7 --secret "机密★3年" --urgent "特急" --doc-no "示例发〔2026〕4号" --title "预印字段定位测试"
+"$NODE" "$VERIFY" --input "$TMP_DIR/preprinted-fields.docx" --profile formal --letterhead preprinted
+unzip -p "$TMP_DIR/preprinted-fields.docx" word/document.xml | grep -q 'w:before="1984"'
 
 cat >"$TMP_DIR/attachment.md" <<'EOF'
 # 附件一：测试附件
 
 附件正文。
 EOF
+cat >"$TMP_DIR/main-send.md" <<'EOF'
+各主送机关：
+
+主送机关只应在输出中出现一次。
+EOF
+"$NODE" "$GEN" --input "$TMP_DIR/main-send.md" --output "$TMP_DIR/main-send.docx" --format formal --letterhead digital --org "示例单位文件" --doc-no "示例发〔2026〕2号" --title "主送机关匹配测试" --to "各主送机关"
+test "$(unzip -p "$TMP_DIR/main-send.docx" word/document.xml | grep -o '各主送机关' | wc -l | tr -d ' ')" -eq 1
+
 "$NODE" "$GEN" --input "$FIXTURE" --output "$TMP_DIR/upward.docx" --format formal --letterhead digital --org "示例单位文件" --doc-no "示例发〔2026〕1号" --title "上行文测试" --upward true --signer "张三"
 "$NODE" "$VERIFY" --input "$TMP_DIR/upward.docx" --profile formal --letterhead digital --upward true
 unzip -p "$TMP_DIR/upward.docx" word/document.xml | grep -q '签发人：'

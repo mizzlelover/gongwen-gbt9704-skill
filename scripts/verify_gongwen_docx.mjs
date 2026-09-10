@@ -129,12 +129,12 @@ if (profile === "formal") {
     check("Red rule width", /style="width:156mm;height:0\.5mm"/.test(doc), "header separator spans the 156 mm type area");
     const docParagraphs = paragraphs(doc);
     const agencyIndex = docParagraphs.findIndex((p) => /w:sz w:val="56"/.test(p) && /w:color w:val="FF0000"/.test(p));
-    const headerFieldCount = agencyIndex < 0 ? 0 : docParagraphs.slice(0, agencyIndex).filter((p) => /\d{6}|机密|秘密|特急|加急/.test(textOf(p))).length;
-    const expectedAgencyBefore = 1984 - headerFieldCount * 560;
-    check("Digital red-head agency position", new RegExp(`w:before="${expectedAgencyBefore}"`).test(doc), `agency mark starts 35 mm below the type-area top after ${headerFieldCount} header field line(s)`);
+    check("Digital red-head agency position", agencyIndex >= 0 && /w:framePr[^>]*w:hAnchor="margin"[^>]*w:vAnchor="page"[^>]*w:xAlign="center"[^>]*w:y="2126"/.test(docParagraphs[agencyIndex]) && /w:before="2015"/.test(docParagraphs[agencyIndex]), "agency mark is independently fixed at the 35 mm type-area position");
     const docNoIndex = docParagraphs.findIndex((p) => /〔\d{4}〕[1-9]\d*号/.test(textOf(p)));
     const agencyToDocNo = agencyIndex >= 0 && docNoIndex > agencyIndex ? docParagraphs.slice(agencyIndex + 1, docNoIndex) : [];
-    check("Agency mark to document number two blank lines", docNoIndex < 0 || (agencyToDocNo.length === 2 && agencyToDocNo.every(isExplicitBlankGridLine)), "document number is two exact 28-point grid lines below the agency mark");
+    const agencyFlowSpacer = agencyToDocNo.filter((p) => /w:before="1880"/.test(p));
+    const agencyGapLines = agencyToDocNo.slice(-2);
+    check("Agency mark to document number two blank lines", docNoIndex < 0 || (agencyFlowSpacer.length === 1 && agencyGapLines.length === 2 && agencyGapLines.every(isExplicitBlankGridLine)), "document number follows the fixed agency mark with two exact 28-point grid lines");
     check("Two blank lines below red rule", hasExplicitTwoLineTitleGap, "title is preceded by two exact 28-point blank paragraphs below the red rule");
     if (docNoIndex >= 0) check("Document number syntax", /〔\d{4}〕[1-9]\d*号/.test(textOf(docParagraphs[docNoIndex])) && !/第/.test(textOf(docParagraphs[docNoIndex])), "year uses full digits, sequence has no 第 or leading zero, and ends with 号");
     if (args.upward === "true") {
@@ -168,6 +168,7 @@ if (profile === "minutes") {
   const attendance = paragraphs(doc).filter((p) => /(?:出席|请假|列席)：/.test(textOf(p)));
   check("Minutes attendance label font", attendance.every((p) => /w:eastAsia="(?:黑体|SimHei|Heiti SC|STHeiti)"/.test(p)), attendance.length ? `${attendance.length} attendance paragraph(s)` : "not present in this document");
   check("Minutes attendee font", attendance.every((p) => /w:eastAsia="(?:仿宋|仿宋_GB2312|FangSong|FangSong_GB2312|STFangsong)"/.test(p)), attendance.length ? "people runs use FangSong" : "not present in this document");
+  check("Minutes attendance indentation", attendance.every((p) => /w:firstLine="-1280"[^>]*w:left="1920"/.test(p)), attendance.length ? "labels start two characters in and wrapped names align after the label" : "not present in this document");
 }
 const redRules = doc.match(/height:(?:0\.35|0\.25|0\.5)mm/g) ?? [];
 if (["formal", "command", "minutes"].includes(profile)) {

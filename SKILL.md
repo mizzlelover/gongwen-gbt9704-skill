@@ -15,7 +15,7 @@ GB/T 9704-2012《党政机关公文格式》现行，2025-05-30 复审继续有�
 
 本工具只处理排版，不判断单位身份、授权状态或后续盖章方式。它会根据用户明确选择的版式模式应用对应的排版规则，不因“正式”“国企”“报告”或仅提供机构名称而擅自使用红头。
 
-生成器可输出 A4、156mm×225mm 版心、三号仿宋正文、小标宋二号标题、四级标题层次、两字缩进，以及居中或单双页页码。四级标题均写入 Word/WPS 标题样式和大纲级别，便于后续插入、更新目录；文章总标题使用独立“公文标题”样式，不进入目录。上行文的文号和签发人在同一行编排；信函、命令（令）、纪要使用各自专用版式；重复传入 `--attachment-file` 时，附件会另页生成并保持页码连续。版记会锚定最后一页版心底部，正式页码按版心下边缘下7mm的位置生成。
+生成器可输出 A4、156mm×225mm 版心、三号仿宋正文、小标宋二号标题、四级标题层次、两字缩进，以及居中或单双页页码。四级标题均写入 Word/WPS 标题样式和大纲级别，便于后续插入、更新目录；文章总标题使用独立“公文标题”样式，不进入目录。上行文的文号和签发人在同一行编排；信函、命令（令）、纪要使用各自专用版式；重复传入 `--attachment-file` 时，附件会另页生成并保持页码连续。版记会锚定最后一页版心底部，正式页码按版心下边缘下7mm的位置生成。正式版头的份号、密级、紧急程度和电子机关标志使用首面固定定位，不会因为左上字段而把机关标志或预印红头留白向下推移。
 
 `references/formal-checklist.md` 是可选的版式复核清单。涉及印章或签名章时，使用者可在 Word/WPS 中插入已取得的图片或完成实体盖章；本生成器不内置印章图像。
 
@@ -51,7 +51,11 @@ soffice --headless --convert-to pdf --outdir /tmp output.docx
 node scripts/verify_gongwen_docx.mjs --input output.docx --profile formal --letterhead preprinted
 # 目标电脑必须装有标准小标宋体和仿宋体时，再加严格字体校验
 node scripts/verify_gongwen_docx.mjs --input output.docx --profile formal --letterhead digital --require-standard-fonts
+# 逐场景生成 DOCX、PDF 和 PNG，人工按截图核对版式
+bash tests/visual-audit.sh /tmp/gongwen-visual-audit
 ```
+
+全条款视觉证据和未自动化边界见[GB/T 9704-2012 全条款视觉核验记录](references/gbt9704-visual-audit.md)。横排表格、联合行文、实体印章、纸张和装订不能只由 DOCX 生成器证明。
 
 校验器核验生成器可检查的版式要素，并按 `ordinary`、`formal`、`letter`、`command`、`minutes` 选择校验档案。输出后仍须在目标 Word/WPS 与实际打印条件下检查首页正文、分页、附件、表格、页码、红头纸套打和装订。
 

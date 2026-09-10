@@ -135,17 +135,20 @@ Windows：
 - [生成器](scripts/generate_gongwen_docx.mjs)：根据输入生成 DOCX 版式。
 - [校验器](scripts/verify_gongwen_docx.mjs)：检查生成器可承诺的 DOCX 版式要素。
 - [回归测试](tests/run_tests.sh)：运行居中与单双页页码生成、DOCX 包结构与 PDF 转换验证。
+- [全条款视觉核验](references/gbt9704-visual-audit.md)：实际生成 12 份 DOCX、渲染 23 张 PNG，并逐条记录截图证据与人工边界。
 - [跨平台安装测试](tests/test-install.sh)：隔离环境中验证九个本地目录和 TraeWork 导入包。
 
 ## 验证
 
 ```bash
 tests/run_tests.sh
+# 需要截图核对时，再运行完整视觉审计
+bash tests/visual-audit.sh /tmp/gongwen-visual-audit
 ```
 
 如果要把字体替代也视为失败，可在生成器和校验器上同时加 `--require-standard-fonts`；当前电脑没有小标宋体或标准仿宋体时，命令会停止并明确列出缺失字体。
 
-这项测试证明生成器、校验器和可打印文件链路可运行。最终文件可按实际用途在目标 Word/WPS 与打印条件中检查。
+这项测试证明生成器、校验器和可打印文件链路可运行。视觉审计会把每个场景转成 PDF 和 PNG，按截图检查版头、标题间距、首页正文、单双页页码、附件和版记。最终文件仍须按实际用途在目标 Word/WPS 与打印条件中检查。
 
 ## 许可
 
