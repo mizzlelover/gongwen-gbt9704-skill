@@ -101,16 +101,26 @@ const titleFontStandard = titleParagraphs.every((p) => /w:eastAsia="(?:方正小
 const titleFontAvailable = titleFontStandard || (!requireStandardFonts && titleParagraphs.every((p) => /w:eastAsia="Songti SC"/.test(p)));
 check("Title style and font", titleFontAvailable, requireStandardFonts ? "small-standard-title font is required" : titleParagraphs.length ? `${titleParagraphs.length} title paragraph(s); Songti SC fallback is allowed unless strict mode is enabled` : "not present in this document");
 
+const isExplicitBlankGridLine = (p) => /w:spacing w:before="0" w:after="0" w:line="560" w:lineRule="exact"/.test(p) && /w:sz w:val="2"/.test(p) && /<w:t[^>]*> <\/w:t>/.test(p);
+const firstTitleIndex = paragraphs(doc).findIndex((p) => /w:pStyle w:val="GongwenTitle"/.test(p));
+const titlePrecedingParagraphs = firstTitleIndex < 0 ? [] : paragraphs(doc).slice(0, firstTitleIndex);
+const titleGapParagraphs = titlePrecedingParagraphs.slice(-2);
+const hasExplicitTwoLineTitleGap = titleGapParagraphs.length === 2 && titleGapParagraphs.every(isExplicitBlankGridLine);
+check("Title has two explicit blank grid lines", !["formal", "letter"].includes(profile) || hasExplicitTwoLineTitleGap, "title is preceded by two exact 28-point blank paragraphs");
+if (/附件：/.test(textOf(doc))) check("Attachment-note continuation indent", /w:firstLine="-960"[^>]*w:left="1600"/.test(doc), "附件说明回行与名称首字对齐");
+
 if (profile === "ordinary") {
   check("No formal red-head drawing", !/w:color w:val="FF0000"/.test(doc), "ordinary output has no red head or red rule");
   check("Centered layout footer", /w:jc w:val="center"/.test(footerCenter) && /w:instr="PAGE"/.test(footerCenter), "ordinary output uses centered page number");
 } else if (profile === "letter") {
   check("Letter first-page page number", !footerCenter && !footerOdd && !footerEven && !/w:instr="PAGE"/.test(footerLetter), "letter output suppresses page numbers");
   check("Letter upper red double rule", (footerLetter.match(/w:fill="FF0000"/g) ?? []).length >= 2 && /w:tblW[^>]*w:w="9638"/.test(doc), "letter output contains 170 mm red double rules");
+  check("Letter upper rule distance", /w:after="227"/.test(paragraphs(doc)[0] ?? ""), "top red double rule is 4 mm below the agency mark");
   check("Letter bottom rule footer", /rIdLetterFooter/.test(doc) && /w:footer="1134"/.test(doc), "bottom red double rule is anchored 20 mm from the paper edge");
 } else {
   check("Odd/even page fields", /w:instr="PAGE"/.test(footerOdd) && /w:instr="PAGE"/.test(footerEven), "odd and even page footers exist");
   check("Odd/even page positions", /w:jc w:val="right"/.test(footerOdd) && /w:jc w:val="left"/.test(footerEven), "odd right and even left");
+  check("Formal page-number distance", /w:footer="1134"/.test(doc), "page-number footer is 7 mm below the 225 mm type area");
 }
 if (profile === "formal") {
   if (args.letterhead === "digital") {
@@ -122,22 +132,37 @@ if (profile === "formal") {
     const headerFieldCount = agencyIndex < 0 ? 0 : docParagraphs.slice(0, agencyIndex).filter((p) => /\d{6}|机密|秘密|特急|加急/.test(textOf(p))).length;
     const expectedAgencyBefore = 1984 - headerFieldCount * 560;
     check("Digital red-head agency position", new RegExp(`w:before="${expectedAgencyBefore}"`).test(doc), `agency mark starts 35 mm below the type-area top after ${headerFieldCount} header field line(s)`);
-    check("Two blank lines below red rule", titleParagraphs.some((p) => /w:before="1120"/.test(p)), "title paragraph reserves two 28-point grid lines below the red rule");
+    const docNoIndex = docParagraphs.findIndex((p) => /〔\d{4}〕[1-9]\d*号/.test(textOf(p)));
+    const agencyToDocNo = agencyIndex >= 0 && docNoIndex > agencyIndex ? docParagraphs.slice(agencyIndex + 1, docNoIndex) : [];
+    check("Agency mark to document number two blank lines", docNoIndex < 0 || (agencyToDocNo.length === 2 && agencyToDocNo.every(isExplicitBlankGridLine)), "document number is two exact 28-point grid lines below the agency mark");
+    check("Two blank lines below red rule", hasExplicitTwoLineTitleGap, "title is preceded by two exact 28-point blank paragraphs below the red rule");
+    if (docNoIndex >= 0) check("Document number syntax", /〔\d{4}〕[1-9]\d*号/.test(textOf(docParagraphs[docNoIndex])) && !/第/.test(textOf(docParagraphs[docNoIndex])), "year uses full digits, sequence has no 第 or leading zero, and ends with 号");
     if (args.upward === "true") {
       check("Upward document number and signer share one row", paragraphs(doc).some((p) => /签发人：/.test(textOf(p)) && /〔|\[|文号|发/.test(textOf(p))), "signer is in the same paragraph row as the document number");
     }
   } else {
     check("Preprinted letterhead reserve", /w:before="\d{4,}"/.test(doc), "first-page top reserve is present");
-    check("No red drawing for preprinted letterhead", !/w:color w:val="FF0000"/.test(doc), "preprinted mode does not redraw red letterhead or rule");
-    check("Title spacing below physical red rule", titleParagraphs.some((p) => /w:before="1120"/.test(p)), "title paragraph reserves two 28-point grid lines below the printed red rule");
+    const preprintedParagraphs = paragraphs(doc);
+    const titleXmlStart = firstTitleIndex < 0 ? doc.length : doc.indexOf(preprintedParagraphs[firstTitleIndex]);
+    const preprintedHeaderXml = titleXmlStart < 0 ? doc : doc.slice(0, titleXmlStart);
+    check("No red drawing for preprinted letterhead", !/w:color w:val="FF0000"/.test(preprintedHeaderXml), "preprinted mode does not redraw red letterhead or rule");
+    check("Title spacing below physical red rule", hasExplicitTwoLineTitleGap, "title is preceded by two exact 28-point blank paragraphs below the printed red rule");
   }
 }
 if (profile === "letter") {
-  check("Letter title spacing", titleParagraphs.some((p) => /w:before="1120"/.test(p)), "title paragraph reserves two 28-point grid lines below the red rule");
+  check("Letter title spacing", hasExplicitTwoLineTitleGap, "title is preceded by two exact 28-point blank paragraphs below the red rule");
+  const letterDocNo = paragraphs(doc).find((p) => /〔\d{4}〕[1-9]\d*号/.test(textOf(p)));
+  if (letterDocNo) check("Letter document number distance", /w:before="280"/.test(letterDocNo), "document number is 3号汉字高度7/8 below the first red double line");
 }
 if (profile === "command") {
-  check("Command agency-to-order spacing", /w:after="1120"/.test(paragraphs(doc)[0] ?? ""), "command agency mark is followed by two blank lines");
-  check("Command order-to-body spacing", paragraphs(doc).slice(1).some((p) => /w:after="1120"/.test(p) && /w:jc w:val="center"/.test(p)), "command number is followed by two blank lines");
+  const commandParagraphs = paragraphs(doc);
+  const commandAgencyIndex = commandParagraphs.findIndex((p) => /w:color w:val="FF0000"/.test(p));
+  const commandOrderIndex = commandParagraphs.findIndex((p, index) => index > commandAgencyIndex && /w:jc w:val="center"/.test(p) && /w:sz w:val="32"/.test(p) && !/w:color w:val="FF0000"/.test(p));
+  const agencyToOrder = commandAgencyIndex >= 0 && commandOrderIndex > commandAgencyIndex ? commandParagraphs.slice(commandAgencyIndex + 1, commandOrderIndex) : [];
+  check("Command agency-to-order spacing", commandOrderIndex < 0 || (agencyToOrder.length === 2 && agencyToOrder.every(isExplicitBlankGridLine)), "command agency mark is followed by two exact 28-point grid lines");
+  const commandTitleIndex = firstTitleIndex;
+  const orderToBody = commandOrderIndex >= 0 && commandTitleIndex > commandOrderIndex ? commandParagraphs.slice(commandOrderIndex + 1, commandTitleIndex) : [];
+  check("Command order-to-body spacing", commandTitleIndex < 0 || (orderToBody.length === 2 && orderToBody.every(isExplicitBlankGridLine)), "command number is followed by two exact 28-point grid lines");
 }
 if (profile === "minutes") {
   const attendance = paragraphs(doc).filter((p) => /(?:出席|请假|列席)：/.test(textOf(p)));
@@ -148,6 +173,8 @@ const redRules = doc.match(/height:(?:0\.35|0\.25|0\.5)mm/g) ?? [];
 if (["formal", "command", "minutes"].includes(profile)) {
   const hasColophon = /抄送：|印发/.test(textOf(doc));
   check("Colophon line thickness model", !hasColophon || (redRules.includes("height:0.35mm") && redRules.includes("height:0.25mm")), "版记粗线0.35 mm、细线0.25 mm");
+  if (hasColophon) check("Colophon bottom anchor", /w:vertAnchor="margin"[^>]*w:horzAnchor="margin"[^>]*w:tblpYSpec="bottom"/.test(doc), "版记浮动表锚定在最后一页版心底部且禁止重叠");
+  if (/抄送：/.test(textOf(doc))) check("Colophon continuation indent", /w:firstLine="-960"[^>]*w:left="1280"/.test(doc), "抄送回行与冒号后的首字对齐");
   if (hasColophon) check("Colophon print-row right tab", /w:tab w:val="right"/.test(doc), "印发机关和日期使用右制表位");
 }
 

@@ -24,7 +24,7 @@ unzip -p "$TMP_DIR/layout.docx" word/document.xml | grep -q 'w:pStyle w:val="Hea
 "$NODE" "$VERIFY" --input "$TMP_DIR/standard.docx" --profile formal --letterhead preprinted
 ! unzip -p "$TMP_DIR/standard.docx" word/document.xml | grep -q '示例单位文件'
 unzip -p "$TMP_DIR/standard.docx" word/document.xml | grep -q '示例发〔2026〕1号'
-unzip -p "$TMP_DIR/standard.docx" word/document.xml | grep -q 'w:before="1120"'
+unzip -p "$TMP_DIR/standard.docx" word/document.xml | grep -q 'w:snapToGrid w:val="false"'
 
 "$NODE" "$GEN" --input "$FIXTURE" --output "$TMP_DIR/digital.docx" --format formal --letterhead digital --org "示例单位文件" --doc-no "示例发〔2026〕1号" --title "电子红头测试" --page-number standard
 "$NODE" "$VERIFY" --input "$TMP_DIR/digital.docx" --profile formal --letterhead digital
@@ -32,7 +32,7 @@ unzip -p "$TMP_DIR/digital.docx" word/document.xml | grep -q '示例单位文件
 unzip -p "$TMP_DIR/digital.docx" word/document.xml | grep -q 'FF0000'
 unzip -p "$TMP_DIR/digital.docx" word/document.xml | grep -q 'height:0.5mm'
 unzip -p "$TMP_DIR/digital.docx" word/document.xml | grep -q 'w:before="1984"'
-unzip -p "$TMP_DIR/digital.docx" word/document.xml | grep -q 'w:before="1120"'
+unzip -p "$TMP_DIR/digital.docx" word/document.xml | grep -q 'w:snapToGrid w:val="false"'
 
 cat >"$TMP_DIR/attachment.md" <<'EOF'
 # 附件一：测试附件
@@ -48,9 +48,30 @@ unzip -p "$TMP_DIR/upward.docx" word/document.xml | grep -q '签发人：'
 unzip -l "$TMP_DIR/letter.docx" | grep -q 'word/footerLetter.xml'
 unzip -p "$TMP_DIR/letter.docx" word/footerLetter.xml | grep -q 'w:fill="FF0000"'
 
-"$NODE" "$GEN" --input "$FIXTURE" --output "$TMP_DIR/with-attachment.docx" --format formal --letterhead preprinted --letterhead-reserve-mm 72 --doc-no "示例发〔2026〕1号" --title "附件测试" --attachment-note "附件一：测试附件" --attachment-file "$TMP_DIR/attachment.md"
-unzip -p "$TMP_DIR/with-attachment.docx" word/document.xml | grep -q '附件一：测试附件'
+"$NODE" "$GEN" --input "$FIXTURE" --output "$TMP_DIR/with-attachment.docx" --format formal --letterhead preprinted --letterhead-reserve-mm 72 --doc-no "示例发〔2026〕1号" --title "附件测试" --attachment-note "1. 测试附件" --attachment-file "$TMP_DIR/attachment.md"
+unzip -p "$TMP_DIR/with-attachment.docx" word/document.xml | grep -q '附件：1. 测试附件'
 unzip -p "$TMP_DIR/with-attachment.docx" word/document.xml | grep -q 'w:pageBreakBefore'
+
+"$NODE" "$GEN" --input "$FIXTURE" --output "$TMP_DIR/command.docx" --format command --org "示例机关命令" --doc-no "第1号" --title "命令正文"
+"$NODE" "$VERIFY" --input "$TMP_DIR/command.docx" --profile command
+
+"$NODE" "$GEN" --input "$FIXTURE" --output "$TMP_DIR/minutes.docx" --format minutes --org "示例机关纪要" --title "纪要正文" --attendees "张三、李四" --absent "王五"
+"$NODE" "$VERIFY" --input "$TMP_DIR/minutes.docx" --profile minutes
+
+"$NODE" "$GEN" --input "$FIXTURE" --output "$TMP_DIR/seal-layout.docx" --format formal --letterhead preprinted --letterhead-reserve-mm 72 --title "签章位置测试" --sender "示例机关" --date "2026年9月10日" --seal-mode seal
+unzip -p "$TMP_DIR/seal-layout.docx" word/document.xml | grep -q 'w:right="1280"'
+
+if "$NODE" "$GEN" --input "$FIXTURE" --output "$TMP_DIR/bad-doc-no.docx" --format formal --letterhead digital --org "示例单位文件" --doc-no "示例发〔2026〕01号" --title "非法文号" >"$TMP_DIR/bad-doc-no.out" 2>&1; then
+  echo "invalid document number unexpectedly succeeded" >&2
+  exit 1
+fi
+grep -q 'GENERATOR ERROR:' "$TMP_DIR/bad-doc-no.out"
+
+if "$NODE" "$GEN" --input "$FIXTURE" --output "$TMP_DIR/bad-date.docx" --format formal --letterhead preprinted --date "2026年09月10日" --title "非法日期" >"$TMP_DIR/bad-date.out" 2>&1; then
+  echo "invalid date unexpectedly succeeded" >&2
+  exit 1
+fi
+grep -q 'GENERATOR ERROR:' "$TMP_DIR/bad-date.out"
 
 if "$NODE" "$GEN" --input "$FIXTURE" --output "$TMP_DIR/strict.docx" --format formal --letterhead digital --org "示例单位文件" --title "严格字体测试" --require-standard-fonts >"$TMP_DIR/strict.out" 2>&1; then
   if ! fc-list -f '%{family}\n' | grep -Eq '方正小标宋简体|方正小标宋_GBK|FZXiaoBiaoSong'; then

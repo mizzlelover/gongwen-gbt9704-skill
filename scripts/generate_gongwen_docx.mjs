@@ -103,9 +103,10 @@ Notes:
   - ordinary is the default for reports, plans and other editable materials. It never creates a red header from --org alone.
   - formal is used only when a formal issuing-document layout is explicitly requested. It defaults to preprinted letterhead: red elements are reserved, not redrawn. Use --letterhead digital only for a complete electronic red-head layout.
   - letter, command and minutes use their dedicated national-standard layout branches. Their required fields must be supplied explicitly.
-  - --org and --doc-no are printed exactly as supplied. The tool formats document content; it does not infer missing information or decide the document's use.
+  - formal and letter document numbers are checked for full-year〔〕sequence号 syntax; dates are checked for YYYY年M月D日 without zero padding.
+  - --org and --doc-no are printed as supplied after boundary validation. The tool formats document content; it does not infer missing information or decide the document's use.
   - The generator reports when the required small-standard-title or FangSong font is unavailable and uses a visible fallback. Add --require-standard-fonts to refuse generation until the required font is installed.
-  - Supports headings, paragraphs, ordered/unordered lines, pipe tables, and repeatable Markdown attachment pages via --attachment-file.
+  - Supports headings, paragraphs, ordered/unordered lines, pipe tables, and repeatable Markdown attachment pages via --attachment-file. The colophon is anchored to the bottom of the final page's type area.
   - No npm dependencies; requires zip in PATH.`);
 }
 
@@ -198,14 +199,14 @@ function titleParagraph(text, before = "0") {
   });
 }
 
-function agencyMarkParagraph(text, before = "0") {
+function agencyMarkParagraph(text, before = "0", after = "0") {
   return paragraph(text, {
     align: "center",
     indent: false,
     fontPreset: "title",
     size: "56",
     color: "FF0000",
-    after: "560",
+    after,
     before,
   });
 }
@@ -237,7 +238,10 @@ function documentNumberParagraph(text, upward = false) {
 
 function upwardHeaderParagraph(docNo, signer) {
   const tabPosition = CONTENT_W - FIRST_LINE_INDENT;
-  return `<w:p><w:pPr><w:jc w:val="both"/><w:ind w:left="${FIRST_LINE_INDENT}" w:right="${FIRST_LINE_INDENT}"/><w:tabs><w:tab w:val="right" w:pos="${tabPosition}"/></w:tabs><w:spacing w:before="0" w:after="227" w:line="560" w:lineRule="exact"/><w:adjustRightInd w:val="true"/><w:snapToGrid w:val="true"/><w:kinsoku w:val="true"/></w:pPr>${run(docNo, { fontPreset: "body", size: "32" })}<w:r><w:tab/></w:r>${run("签发人：", { fontPreset: "body", size: "32" })}${run(signer, { fontPreset: "h2", size: "32" })}</w:p>`;
+  const signers = String(signer).split(/[、,，;；\s]+/).map((name) => name.trim()).filter(Boolean);
+  if (signers.length > 2) throw new Error("upward --signer supports up to two names; use the authority's joint-signature template for more signers");
+  const signerRuns = signers.map((name, index) => `${index ? run("　　", { fontPreset: "h2", size: "32" }) : ""}${run(name, { fontPreset: "h2", size: "32" })}`).join("");
+  return `<w:p><w:pPr><w:jc w:val="both"/><w:ind w:left="${FIRST_LINE_INDENT}" w:right="${FIRST_LINE_INDENT}"/><w:tabs><w:tab w:val="right" w:pos="${tabPosition}"/></w:tabs><w:spacing w:before="0" w:after="227" w:line="560" w:lineRule="exact"/><w:adjustRightInd w:val="true"/><w:snapToGrid w:val="true"/><w:kinsoku w:val="true"/></w:pPr>${run(docNo, { fontPreset: "body", size: "32" })}<w:r><w:tab/></w:r>${run("签发人：", { fontPreset: "body", size: "32" })}${signerRuns}</w:p>`;
 }
 
 function subtitleParagraph(text) {
@@ -262,6 +266,38 @@ function mainSendParagraph(text) {
 function normalizeMainSend(text) {
   const value = String(text ?? "").trim();
   return value && /[:：]$/.test(value) ? value : `${value}：`;
+}
+
+function normalizeDocumentNumber(text, label = "--doc-no") {
+  const value = String(text ?? "").trim();
+  if (!value) return value;
+  if (!/^[^〔〕\[\]【】]+〔\d{4}〕[1-9]\d*号$/.test(value) || /第/.test(value)) {
+    throw new Error(`${label} must use 年份全称、六角括号、非虚位顺序号且以“号”结尾，例如“示例发〔2026〕1号”`);
+  }
+  return value;
+}
+
+function normalizeChineseDate(text, label = "--date", allowPrintSuffix = false) {
+  const raw = String(text ?? "").trim();
+  const value = allowPrintSuffix ? raw.replace(/印发$/, "") : raw;
+  const match = value.match(/^(\d{4})年((?:[1-9]|1[0-2]))月((?:[1-9]|[12]\d|3[01]))日$/);
+  if (!match) throw new Error(`${label} must use YYYY年M月D日 and must not zero-pad month/day`);
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const date = new Date(Date.UTC(year, month - 1, day));
+  if (date.getUTCFullYear() !== year || date.getUTCMonth() !== month - 1 || date.getUTCDate() !== day) {
+    throw new Error(`${label} is not a valid calendar date`);
+  }
+  return value;
+}
+
+function normalizeAttachmentNote(text) {
+  const value = String(text ?? "").trim().replace(/[。；;]+$/, "");
+  if (!value) throw new Error("--attachment-note cannot be empty");
+  const names = value.replace(/^附件[：:]\s*/, "").trim();
+  if (!names) throw new Error("--attachment-note must contain an attachment name after 附件：");
+  return `附件：${names}`;
 }
 
 function h1(text) {
@@ -320,6 +356,10 @@ function right(text) {
   return paragraph(text, { align: "right", indent: false, right: FIRST_LINE_INDENT });
 }
 
+function rightWithIndent(text, rightIndent) {
+  return paragraph(text, { align: "right", indent: false, right: String(rightIndent) });
+}
+
 function redRule(thickness = "5") {
   const height = thickness === "thick" ? "0.35mm" : thickness === "thin" ? "0.25mm" : "0.5mm";
   return `<w:p><w:pPr><w:spacing w:before="0" w:after="0" w:line="80" w:lineRule="exact"/></w:pPr><w:r><w:rPr><w:color w:val="FF0000"/></w:rPr><w:pict><v:rect xmlns:v="urn:schemas-microsoft-com:vml" style="width:156mm;height:${height}" fillcolor="#FF0000" stroked="f"/></w:pict></w:r></w:p>`;
@@ -341,29 +381,92 @@ function minutesPersonParagraph(label, people, before = "0") {
 }
 
 function headerFieldParagraph(text, fontPreset = "h1", opts = {}) {
-  return paragraph(text, { align: opts.align ?? "left", indent: false, fontPreset, size: "32", after: opts.after ?? "0", left: opts.left, right: opts.right });
+  return paragraph(text, { align: opts.align ?? "left", indent: false, fontPreset, size: "32", before: opts.before ?? "0", after: opts.after ?? "0", left: opts.left, right: opts.right });
 }
 
 function attachmentNote(text) {
-  return paragraph(`附件：${text}`, { align: "left", fontPreset: "body", size: "32", before: "560", firstLine: FIRST_LINE_INDENT, left: "0" });
+  return paragraph(normalizeAttachmentNote(text), { align: "left", fontPreset: "body", size: "32", before: "560", firstLine: "-960", left: "1600" });
+}
+
+function estimatedTextWidthDxa(text) {
+  return [...String(text ?? "")].reduce((sum, char) => sum + (/^[\x00-\x7f]$/.test(char) ? 160 : 320), 0);
+}
+
+function signatureParagraphs(args) {
+  if (args["seal-mode"] === "signed") {
+    if (!args.signer || !args["signer-title"]) throw new Error("signed seal mode requires --signer and --signer-title");
+    const lines = [rightWithIndent(`${args["signer-title"]}  ${args.signer}`, FIRST_LINE_INDENT * 2)];
+    if (args.date) lines.push(rightWithIndent(args.date, FIRST_LINE_INDENT * 2));
+    return lines;
+  }
+  if (args["seal-mode"] === "seal") {
+    if (!args.sender && !args.date) return [];
+    const lines = [];
+    if (args.sender) lines.push(rightWithIndent(args.sender, FIRST_LINE_INDENT * 2));
+    if (args.date) lines.push(rightWithIndent(args.date, FIRST_LINE_INDENT * 2));
+    return lines;
+  }
+  if (!args.sender && !args.date) return [];
+  if (!args.sender || !args.date) return [right(args.sender || args.date)];
+  const senderWidth = estimatedTextWidthDxa(args.sender);
+  const dateWidth = estimatedTextWidthDxa(args.date);
+  let senderRight = FIRST_LINE_INDENT;
+  let dateRight = Math.max(0, senderWidth - dateWidth);
+  if (dateWidth > senderWidth) {
+    dateRight = FIRST_LINE_INDENT;
+    senderRight = dateWidth - senderWidth + FIRST_LINE_INDENT;
+  }
+  return [
+    paragraph(args.sender, { align: "right", indent: false, right: String(senderRight) }),
+    paragraph(args.date, { align: "right", indent: false, right: String(dateRight) }),
+  ];
+}
+
+function colophonTextRow(text, align = "left") {
+  return `<w:tr><w:tc><w:tcPr><w:tcW w:w="${CONTENT_W}" w:type="dxa"/><w:tcMar><w:top w:w="0" w:type="dxa"/><w:left w:w="0" w:type="dxa"/><w:bottom w:w="0" w:type="dxa"/><w:right w:w="0" w:type="dxa"/></w:tcMar></w:tcPr>${paragraph(text, { align, firstLine: "-960", left: "1280", right: "320", fontPreset: "body", size: "28" })}</w:tc></w:tr>`;
+}
+
+function colophonRuleRow(thickness) {
+  const heightMm = thickness === "thick" ? "0.35" : "0.25";
+  return `<w:tr><w:trPr><w:cantSplit/><w:trHeight w:val="${mmToDxa(heightMm)}" w:hRule="exact"/></w:trPr><w:tc><w:tcPr><w:tcW w:w="${CONTENT_W}" w:type="dxa"/><w:tcMar><w:top w:w="0" w:type="dxa"/><w:left w:w="0" w:type="dxa"/><w:bottom w:w="0" w:type="dxa"/><w:right w:w="0" w:type="dxa"/></w:tcMar></w:tcPr>${redRule(thickness)}</w:tc></w:tr>`;
 }
 
 function colophon(args) {
   if (!args["cc"] && !args["print-org"] && !args["print-date"]) return [];
-  const body = [redRule("thick")];
-  if (args.cc) body.push(paragraph(`抄送：${args.cc.replace(/[。.]?$/, "")}。`, { align: "left", indent: false, left: "320", right: "320", fontPreset: "body", size: "28" }));
-  if (args.cc) body.push(redRule("thin"));
+  const body = [colophonRuleRow("thick")];
+  if (args.cc) body.push(colophonTextRow(`抄送：${args.cc.replace(/[。．.]+$/, "")}。`));
+  if (args.cc) body.push(colophonRuleRow("thin"));
   if (args["print-org"] || args["print-date"]) {
     const left = args["print-org"] ?? "";
     const rightValue = args["print-date"] ? `${args["print-date"].replace(/印发$/, "")}印发` : "";
-    body.push(`<w:p><w:pPr><w:jc w:val="both"/><w:ind w:left="320" w:right="320"/><w:tabs><w:tab w:val="right" w:pos="${CONTENT_W - 320}"/></w:tabs><w:spacing w:before="0" w:after="0" w:line="560" w:lineRule="exact"/></w:pPr>${run(left, { fontPreset: "body", size: "28" })}<w:r><w:tab/></w:r>${run(rightValue, { fontPreset: "body", size: "28" })}</w:p>`);
+    const printRow = `<w:p><w:pPr><w:jc w:val="both"/><w:ind w:left="320" w:right="320"/><w:tabs><w:tab w:val="right" w:pos="${CONTENT_W - 320}"/></w:tabs><w:spacing w:before="0" w:after="0" w:line="560" w:lineRule="exact"/></w:pPr>${run(left, { fontPreset: "body", size: "28" })}<w:r><w:tab/></w:r>${run(rightValue, { fontPreset: "body", size: "28" })}</w:p>`;
+    body.push(`<w:tr><w:tc><w:tcPr><w:tcW w:w="${CONTENT_W}" w:type="dxa"/><w:tcMar><w:top w:w="0" w:type="dxa"/><w:left w:w="0" w:type="dxa"/><w:bottom w:w="0" w:type="dxa"/><w:right w:w="0" w:type="dxa"/></w:tcMar></w:tcPr>${printRow}</w:tc></w:tr>`);
   }
-  body.push(redRule("thick"));
-  return body;
+  body.push(colophonRuleRow("thick"));
+  const tablePr = `<w:tblPr><w:tblpPr w:leftFromText="0" w:rightFromText="0" w:topFromText="0" w:bottomFromText="0" w:vertAnchor="margin" w:horzAnchor="margin" w:tblpXSpec="center" w:tblpYSpec="bottom"/><w:tblOverlap w:val="never"/><w:tblW w:w="${CONTENT_W}" w:type="dxa"/><w:tblLayout w:type="fixed"/><w:tblBorders><w:top w:val="nil"/><w:left w:val="nil"/><w:bottom w:val="nil"/><w:right w:val="nil"/><w:insideH w:val="nil"/><w:insideV w:val="nil"/></w:tblBorders><w:tblCellMar><w:top w:w="0" w:type="dxa"/><w:left w:w="0" w:type="dxa"/><w:bottom w:w="0" w:type="dxa"/><w:right w:w="0" w:type="dxa"/></w:tblCellMar></w:tblPr>`;
+  return [`<w:tbl>${tablePr}<w:tblGrid><w:gridCol w:w="${CONTENT_W}"/></w:tblGrid>${body.join("")}</w:tbl>`];
 }
 
 function emptyLine() {
   return `<w:p><w:pPr><w:spacing w:line="560" w:lineRule="exact"/></w:pPr></w:p>`;
+}
+
+function blankGridLine() {
+  return paragraph("\u00a0", {
+    align: "left",
+    indent: false,
+    fontPreset: "body",
+    size: "2",
+    line: "560",
+    lineRule: "exact",
+    snapToGrid: false,
+    before: "0",
+    after: "0",
+  });
+}
+
+function blankGridLines(count = 2) {
+  return Array.from({ length: count }, () => blankGridLine());
 }
 
 function tableXml(headers, rows) {
@@ -466,10 +569,21 @@ function isMatchingParagraph(block, text) {
 }
 
 function isChineseDateParagraph(block) {
-  return (
-    block?.type === "paragraph" &&
-    /^\d{4}年\d{1,2}月\d{1,2}日$/.test(normalizeSignatureText(block.text))
-  );
+  if (block?.type !== "paragraph") return false;
+  try {
+    normalizeChineseDate(normalizeSignatureText(block.text), "source date");
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function validateDateParagraphs(blocks) {
+  for (const block of blocks) {
+    if (block?.type === "paragraph" && /^\d{4}年\d{1,2}月\d{1,2}日$/.test(normalizeSignatureText(block.text))) {
+      normalizeChineseDate(normalizeSignatureText(block.text), "source date");
+    }
+  }
 }
 
 function stripTrailingMatchingSignature(blocks, args) {
@@ -556,6 +670,7 @@ function buildDocument(blocks, args) {
   const letterhead = args.letterhead === "digital" ? "digital" : "preprinted";
   const pageNumberMode = resolvePageNumberMode(args, format);
   const body = [];
+  let titleGapLines = 0;
   const pageMarginTop = format === "letter" ? 1701 : format === "command" ? 1134 : 2098;
   const sourceBlocks = [...blocks];
   if (!title && sourceBlocks[0]?.type === "heading") {
@@ -564,6 +679,7 @@ function buildDocument(blocks, args) {
   if (title && sourceBlocks[0]?.type === "heading" && sourceBlocks[0].text.trim() === title.trim()) {
     sourceBlocks.shift();
   }
+  validateDateParagraphs(sourceBlocks);
   stripTrailingMatchingSignature(sourceBlocks, args);
   let mainSend = args.to;
   if (mainSend && isMatchingParagraph(sourceBlocks[0], mainSend)) sourceBlocks.shift();
@@ -580,30 +696,49 @@ function buildDocument(blocks, args) {
     if (args["copy-no"]) body.push(headerFieldParagraph(String(args["copy-no"]).padStart(6, "0"), "body"));
     if (args.secret) body.push(headerFieldParagraph(args.secret));
     if (args.urgent) body.push(headerFieldParagraph(args.urgent));
-    if (letterhead === "digital" && args.org) body.push(agencyMarkParagraph(args.org, String(Math.max(0, 1984 - headerFieldCount * 560))));
+    if (letterhead === "digital" && args.org) {
+      body.push(agencyMarkParagraph(args.org, String(Math.max(0, 1984 - headerFieldCount * 560)), "0"));
+      if (args["doc-no"]) body.push(...blankGridLines(2));
+    }
     if (letterhead === "preprinted") {
       const reserve = Number(args["letterhead-reserve-mm"] ?? 72);
       if (!Number.isFinite(reserve) || reserve < 37 || reserve > 130) throw new Error("--letterhead-reserve-mm must be between 37 and 130");
       body.push(letterheadReserveParagraph(Math.max(37, reserve - headerFieldCount * 9.877)));
     }
+    if (args["doc-no"]) args["doc-no"] = normalizeDocumentNumber(args["doc-no"]);
     if (upward && args["doc-no"] && args.signer) body.push(upwardHeaderParagraph(args["doc-no"], args.signer));
     else if (args["doc-no"]) body.push(documentNumberParagraph(args["doc-no"], upward));
     if (letterhead === "digital" || args["preprinted-rule"] === "true") body.push(redRule());
+    titleGapLines = 2;
   } else if (format === "letter") {
     if (!args.org) throw new Error("letter format requires --org");
     body.push(paragraph(args.org, { align: "center", indent: false, fontPreset: "title", size: "44", color: "FF0000", before: "0", after: "227" }));
     body.push(redDoubleRule({ upperMm: "0.35", lowerMm: "0.25" }));
-    if (args["doc-no"]) body.push(headerFieldParagraph(args["doc-no"], "body", { align: "right" }));
+    if (args["doc-no"]) {
+      args["doc-no"] = normalizeDocumentNumber(args["doc-no"]);
+      body.push(headerFieldParagraph(args["doc-no"], "body", { align: "right", before: "280" }));
+    }
+    titleGapLines = 2;
   } else if (format === "command") {
     if (!args.org) throw new Error("command format requires --org");
-    body.push(paragraph(args.org, { align: "center", indent: false, fontPreset: "title", size: "44", color: "FF0000", before: "0", after: "1120" }));
-    if (args["doc-no"]) body.push(paragraph(args["doc-no"], { align: "center", indent: false, fontPreset: "body", size: "32", after: "1120" }));
+    if (!args["doc-no"]) throw new Error("command format requires --doc-no for the 令号");
+    body.push(paragraph(args.org, { align: "center", indent: false, fontPreset: "title", size: "44", color: "FF0000", before: "0", after: "0" }));
+    if (args["doc-no"]) {
+      body.push(...blankGridLines(2));
+      body.push(paragraph(args["doc-no"], { align: "center", indent: false, fontPreset: "body", size: "32", after: "0" }));
+      body.push(...blankGridLines(2));
+    }
   } else if (format === "minutes") {
     if (!args.org) throw new Error("minutes format requires --org (for XXXXX纪要)");
+    if (!/纪要$/.test(String(args.org).trim())) throw new Error("minutes --org must end with“纪要”");
     body.push(paragraph(args.org, { align: "center", indent: false, fontPreset: "title", size: "44", color: "FF0000", before: "1984", after: "560" }));
   }
-  const hasRedRule = (formal && (letterhead === "digital" || letterhead === "preprinted" || args["preprinted-rule"] === "true")) || format === "letter";
-  if (title) body.push(titleParagraph(title, hasRedRule ? "1120" : "0"));
+  if (args.date) args.date = normalizeChineseDate(args.date);
+  if (args["print-date"]) args["print-date"] = normalizeChineseDate(args["print-date"], "--print-date", true);
+  if (title) {
+    if (titleGapLines) body.push(...blankGridLines(titleGapLines));
+    body.push(titleParagraph(title));
+  }
   if (args.subtitle) body.push(subtitleParagraph(args.subtitle));
   if (mainSend) body.push(mainSendParagraph(mainSend));
 
@@ -619,20 +754,13 @@ function buildDocument(blocks, args) {
     }
     body.push(renderParagraph(block));
   }
-  if (args["attachment-note"]) body.push(attachmentNote(args["attachment-note"]));
+  if (args["attachment-note"]) {
+    if (body.at(-1) === emptyLine()) body.pop();
+    body.push(attachmentNote(args["attachment-note"]));
+  }
   if (args.sender || args.date) {
     body.push(emptyLine());
-    if (args["seal-mode"] === "signed") {
-      if (!args.signer || !args["signer-title"]) throw new Error("signed seal mode requires --signer and --signer-title");
-      body.push(right(`${args["signer-title"]}  ${args.signer}`));
-      if (args.date) body.push(right(args.date));
-    } else if (args["seal-mode"] === "seal") {
-      if (args.sender) body.push(right(args.sender));
-      if (args.date) body.push(right(args.date));
-    } else {
-      if (args.sender) body.push(right(args.sender));
-      if (args.date) body.push(right(args.date));
-    }
+    body.push(...signatureParagraphs(args));
   }
   if (args.note) body.push(paragraph(`（${args.note.replace(/^（|）$/g, "")}）`, { align: "left", fontPreset: "body", size: "32" }));
   const attachmentFiles = Array.isArray(args["attachment-file"]) ? args["attachment-file"] : args["attachment-file"] ? [args["attachment-file"]] : [];
@@ -652,7 +780,7 @@ function buildDocument(blocks, args) {
     : pageNumberMode === "center"
       ? '<w:footerReference w:type="default" r:id="rIdFooterCenter"/>'
       : "");
-  const footerDistance = format === "letter" ? "1134" : "1588";
+  const footerDistance = format === "letter" || pageNumberMode === "standard" ? "1134" : "1588";
   body.push(`<w:sectPr>${footerRefs}<w:pgSz w:w="${PAGE_W}" w:h="${PAGE_H}"/><w:pgMar w:top="${pageMarginTop}" w:right="${MARGIN.right}" w:bottom="${MARGIN.bottom}" w:left="${MARGIN.left}" w:header="720" w:footer="${footerDistance}" w:gutter="0"/><w:docGrid w:type="lines" w:linePitch="560"/></w:sectPr>`);
   return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:v="urn:schemas-microsoft-com:vml"><w:body>${body.join("")}</w:body></w:document>`;
 }
