@@ -104,7 +104,7 @@ node scripts/generate_gongwen_docx.mjs --input tests/fixture.md --output /tmp/fo
 node scripts/verify_gongwen_docx.mjs --input /tmp/formal.docx --profile formal --letterhead preprinted
 ```
 
-只有需要完整电子红头文件时，才加 `--letterhead digital`。打开文档后，Word/WPS 的“引用→目录”可以按“标题1—标题4”生成并更新目录；是否显示第四级，在目录设置中选择。
+只有需要完整电子红头文件时，才加 `--letterhead digital`。红头和标题要使用目标电脑中实际安装的小标宋体；生成器缺少小标宋体或仿宋体时会在终端明确警告并写出替代字体，要求严格阻止替代输出时加 `--require-standard-fonts`。红线下标题会按版心网格预留两行，不会贴着分隔线。打开文档后，Word/WPS 的“引用→目录”可以按“标题1—标题4”生成并更新目录；是否显示第四级，在目录设置中选择。
 
 ## 跨平台安装
 
@@ -139,6 +139,8 @@ Windows：
 ```bash
 tests/run_tests.sh
 ```
+
+如果要把字体替代也视为失败，可在生成器和校验器上同时加 `--require-standard-fonts`；当前电脑没有小标宋体或标准仿宋体时，命令会停止并明确列出缺失字体。
 
 这项测试证明生成器、校验器和可打印文件链路可运行。最终文件可按实际用途在目标 Word/WPS 与打印条件中检查。
 

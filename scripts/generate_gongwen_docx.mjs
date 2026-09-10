@@ -25,22 +25,44 @@ function installedFontFamilies() {
 }
 
 const INSTALLED_FONTS = installedFontFamilies();
-function preferredFont(candidates) {
-  return candidates.find((font) => INSTALLED_FONTS.has(font)) ?? candidates[0];
+function preferredFont(candidates, fallback) {
+  return candidates.find((font) => INSTALLED_FONTS.has(font)) ?? fallback ?? candidates[0];
 }
 
 const FONT = {
-  title: { eastAsia: preferredFont(["方正小标宋简体", "方正小标宋_GBK", "FZXiaoBiaoSong-B05S"]), ascii: "Times New Roman", cs: "Times New Roman" },
-  subtitle: { eastAsia: preferredFont(["仿宋", "仿宋_GB2312", "STFangsong"]), ascii: "Times New Roman", cs: "Times New Roman" },
-  body: { eastAsia: preferredFont(["仿宋", "仿宋_GB2312", "FangSong", "FangSong_GB2312", "STFangsong"]), ascii: "Times New Roman", cs: "Times New Roman" },
-  h1: { eastAsia: preferredFont(["黑体", "SimHei", "Heiti SC", "STHeiti"]), ascii: "Times New Roman", cs: "Times New Roman" },
-  h2: { eastAsia: preferredFont(["楷体", "楷体_GB2312", "KaiTi", "Kaiti SC", "STKaiti"]), ascii: "Times New Roman", cs: "Times New Roman" },
-  song: { eastAsia: preferredFont(["宋体", "SimSun"]), ascii: "宋体", cs: "宋体" },
+  title: { eastAsia: preferredFont(["方正小标宋简体", "方正小标宋_GBK", "FZXiaoBiaoSong-B05S", "FZXiaoBiaoSong-B13S"], "Songti SC"), ascii: "Times New Roman", cs: "Times New Roman" },
+  subtitle: { eastAsia: preferredFont(["仿宋", "仿宋_GB2312", "STFangsong"], "STFangsong"), ascii: "Times New Roman", cs: "Times New Roman" },
+  body: { eastAsia: preferredFont(["仿宋", "仿宋_GB2312", "FangSong", "FangSong_GB2312", "STFangsong"], "STFangsong"), ascii: "Times New Roman", cs: "Times New Roman" },
+  h1: { eastAsia: preferredFont(["黑体", "SimHei", "Heiti SC", "STHeiti"], "Heiti SC"), ascii: "Times New Roman", cs: "Times New Roman" },
+  h2: { eastAsia: preferredFont(["楷体", "楷体_GB2312", "KaiTi", "Kaiti SC", "STKaiti"], "Kaiti SC"), ascii: "Times New Roman", cs: "Times New Roman" },
+  song: { eastAsia: preferredFont(["宋体", "SimSun"], "Songti SC"), ascii: "宋体", cs: "宋体" },
 };
+
+const STANDARD_FONT_CANDIDATES = {
+  title: ["方正小标宋简体", "方正小标宋_GBK", "FZXiaoBiaoSong-B05S", "FZXiaoBiaoSong-B13S"],
+  body: ["仿宋", "仿宋_GB2312", "FangSong", "FangSong_GB2312"],
+};
+
+function missingFonts() {
+  return Object.entries(STANDARD_FONT_CANDIDATES)
+    .filter(([, candidates]) => !candidates.some((font) => INSTALLED_FONTS.has(font)))
+    .map(([role]) => role);
+}
+
+function reportFontStatus(args) {
+  const missing = missingFonts();
+  if (!missing.length) return;
+  const details = [];
+  if (missing.includes("title")) details.push(`标题和发文机关标志使用“${FONT.title.eastAsia}”替代`);
+  if (missing.includes("body")) details.push(`正文使用“${FONT.body.eastAsia}”替代`);
+  const message = `当前环境缺少国标常用字体：${details.join("；")}。请安装方正小标宋简体、方正小标宋_GBK 或 FZXiaoBiaoSong，以及可用的仿宋字体后重新生成。`;
+  if (args["require-standard-fonts"]) throw new Error(`FONT ERROR: ${message}`);
+  console.error(`FONT WARNING: ${message}`);
+}
 
 function usage() {
   console.log(`Usage:
-  node generate_gongwen_docx.mjs --input source.md --output out.docx [--format ordinary|formal|letter|command|minutes] [--letterhead preprinted|digital] [--org 发文机关] [--doc-no 发文字号] [--title 标题] [--subtitle 副标题] [--to 主送机关] [--sender 落款] [--date 日期] [--page-number center|standard|none]
+  node generate_gongwen_docx.mjs --input source.md --output out.docx [--format ordinary|formal|letter|command|minutes] [--letterhead preprinted|digital] [--org 发文机关] [--doc-no 发文字号] [--title 标题] [--subtitle 副标题] [--to 主送机关] [--sender 落款] [--date 日期] [--page-number center|standard|none] [--require-standard-fonts]
 
 Notes:
   - Converts Markdown to a GB/T 9704-2012 page-layout DOCX.
@@ -48,13 +70,14 @@ Notes:
   - formal is used only when a formal issuing-document layout is explicitly requested. It defaults to preprinted letterhead: red elements are reserved, not redrawn. Use --letterhead digital only for a complete electronic red-head layout.
   - letter, command and minutes use their dedicated national-standard layout branches. Their required fields must be supplied explicitly.
   - --org and --doc-no are printed exactly as supplied. The tool formats document content; it does not infer missing information or decide the document's use.
+  - The generator reports when the required small-standard-title or FangSong font is unavailable and uses a visible fallback. Add --require-standard-fonts to refuse generation until the required font is installed.
   - Supports headings, paragraphs, ordered/unordered lines, and pipe tables.
   - No npm dependencies; requires zip in PATH.`);
 }
 
 function parseArgs(argv) {
   const args = {};
-  const flags = new Set(["help", "no-page-number", "no-page-numbers"]);
+  const flags = new Set(["help", "no-page-number", "no-page-numbers", "require-standard-fonts"]);
   for (let i = 2; i < argv.length; i += 1) {
     const key = argv[i];
     if (!key.startsWith("--")) continue;
@@ -114,26 +137,29 @@ function paragraph(text, opts = {}) {
   const keepNext = opts.keepNext ? "<w:keepNext/>" : "";
   const before = opts.before ?? "0";
   const after = opts.after ?? "0";
+  const line = opts.line ?? "560";
+  const lineRule = opts.lineRule ?? "exact";
   const style = opts.style ? `<w:pStyle w:val="${attr(opts.style)}"/>` : "";
   const outline = opts.outlineLevel === undefined ? "" : `<w:outlineLvl w:val="${opts.outlineLevel}"/>`;
   const pageBreak = opts.pageBreakBefore ? "<w:pageBreakBefore/>" : "";
-  const pPr = `<w:pPr>${style}${keepNext}${pageBreak}${align}${indent}${outline}<w:spacing w:before="${before}" w:after="${after}" w:line="560" w:lineRule="exact"/><w:adjustRightInd w:val="true"/><w:snapToGrid w:val="true"/><w:kinsoku w:val="true"/></w:pPr>`;
+  const snapToGrid = opts.snapToGrid === false ? "<w:snapToGrid w:val=\"false\"/>" : "<w:snapToGrid w:val=\"true\"/>";
+  const pPr = `<w:pPr>${style}${keepNext}${pageBreak}${align}${indent}${outline}<w:spacing w:before="${before}" w:after="${after}" w:line="${line}" w:lineRule="${lineRule}"/><w:adjustRightInd w:val="true"/>${snapToGrid}<w:kinsoku w:val="true"/></w:pPr>`;
   return `<w:p>${pPr}${run(text, opts)}</w:p>`;
 }
 
-function titleParagraph(text) {
+function titleParagraph(text, before = "0") {
   return paragraph(text, {
     align: "center",
     indent: false,
     fontPreset: "title",
     size: "44",
-    before: "0",
+    before,
     after: "560",
     style: "GongwenTitle",
   });
 }
 
-function agencyMarkParagraph(text) {
+function agencyMarkParagraph(text, before = "0") {
   return paragraph(text, {
     align: "center",
     indent: false,
@@ -141,7 +167,21 @@ function agencyMarkParagraph(text) {
     size: "56",
     color: "FF0000",
     after: "560",
-    before: "5953",
+    before,
+  });
+}
+
+function letterheadReserveParagraph(reserveMm) {
+  const before = Math.round((reserveMm - 37) * 56.692913);
+  return paragraph("\u00a0", {
+    align: "left",
+    indent: false,
+    fontPreset: "body",
+    size: "2",
+    line: "1",
+    snapToGrid: false,
+    before: String(before),
+    after: "0",
   });
 }
 
@@ -231,12 +271,17 @@ function right(text) {
   return paragraph(text, { align: "right", indent: false, right: FIRST_LINE_INDENT });
 }
 
-function redRule(thickness = "8") {
-  return `<w:p><w:pPr><w:spacing w:before="0" w:after="0" w:line="80" w:lineRule="exact"/></w:pPr><w:r><w:rPr><w:color w:val="FF0000"/></w:rPr><w:pict><v:rect xmlns:v="urn:schemas-microsoft-com:vml" style="width:156mm;height:${thickness === "8" ? "0.8mm" : "0.35mm"}" fillcolor="#FF0000" stroked="f"/></w:pict></w:r></w:p>`;
+function redRule(thickness = "5") {
+  const height = thickness === "5" ? "0.5mm" : "0.35mm";
+  return `<w:p><w:pPr><w:spacing w:before="0" w:after="0" w:line="80" w:lineRule="exact"/></w:pPr><w:r><w:rPr><w:color w:val="FF0000"/></w:rPr><w:pict><v:rect xmlns:v="urn:schemas-microsoft-com:vml" style="width:156mm;height:${height}" fillcolor="#FF0000" stroked="f"/></w:pict></w:r></w:p>`;
 }
 
 function headerFieldParagraph(text, fontPreset = "h1", opts = {}) {
   return paragraph(text, { align: opts.align ?? "left", indent: false, fontPreset, size: "32", after: opts.after ?? "0", left: opts.left, right: opts.right });
+}
+
+function signerParagraph(name) {
+  return `<w:p><w:pPr><w:jc w:val="right"/><w:ind w:right="${FIRST_LINE_INDENT}"/><w:spacing w:before="0" w:after="0" w:line="560" w:lineRule="exact"/><w:adjustRightInd w:val="true"/><w:snapToGrid w:val="true"/><w:kinsoku w:val="true"/></w:pPr>${run("签发人：", { fontPreset: "body", size: "32" })}${run(name, { fontPreset: "h2", size: "32" })}</w:p>`;
 }
 
 function attachmentNote(text) {
@@ -245,7 +290,7 @@ function attachmentNote(text) {
 
 function colophon(args) {
   if (!args["cc"] && !args["print-org"] && !args["print-date"]) return [];
-  const body = [redRule("4")];
+  const body = [redRule("5")];
   if (args.cc) body.push(paragraph(`抄送：${args.cc.replace(/[。.]?$/, "")}。`, { align: "left", indent: false, left: "320", right: "320", fontPreset: "body", size: "28" }));
   if (args.cc) body.push(redRule("2"));
   if (args["print-org"] || args["print-date"]) {
@@ -253,7 +298,7 @@ function colophon(args) {
     const rightValue = args["print-date"] ? `${args["print-date"].replace(/印发$/, "")}印发` : "";
     body.push(`<w:p><w:pPr><w:jc w:val="both"/><w:ind w:left="320" w:right="320"/><w:spacing w:before="0" w:after="0" w:line="560" w:lineRule="exact"/></w:pPr>${run(left, { fontPreset: "body", size: "28" })}<w:r><w:tab/></w:r>${run(rightValue, { fontPreset: "body", size: "28" })}</w:p>`);
   }
-  body.push(redRule("4"));
+  body.push(redRule("5"));
   return body;
 }
 
@@ -418,16 +463,21 @@ function renderParagraph(block) {
   return paragraph(block.text);
 }
 
+function resolvePageNumberMode(args, format) {
+  if (args["no-page-number"] || args["no-page-numbers"]) return "none";
+  if (["center", "standard", "none"].includes(args["page-number"])) return args["page-number"];
+  if (format === "letter") return "none";
+  if (format === "formal" || format === "command" || format === "minutes") return "standard";
+  return "center";
+}
+
 function buildDocument(blocks, args) {
   let title = args.title;
   const format = ["ordinary", "formal", "letter", "command", "minutes"].includes(args.format) ? args.format : "ordinary";
   const letterhead = args.letterhead === "digital" ? "digital" : "preprinted";
-  const pageNumberMode = args["no-page-number"] || args["no-page-numbers"]
-    ? "none"
-    : ["center", "standard", "none"].includes(args["page-number"])
-      ? args["page-number"]
-      : format === "formal" || format === "letter" || format === "command" || format === "minutes" ? "standard" : "center";
+  const pageNumberMode = resolvePageNumberMode(args, format);
   const body = [];
+  const pageMarginTop = format === "letter" ? 1701 : format === "command" ? 1134 : 2098;
   const sourceBlocks = [...blocks];
   if (!title && sourceBlocks[0]?.type === "heading") {
     title = sourceBlocks.shift().text;
@@ -444,34 +494,36 @@ function buildDocument(blocks, args) {
   const upward = args["upward"] === "true" || args["upward"] === true;
   const formal = format === "formal";
   if (formal) {
+    if (letterhead === "digital" && !args.org) throw new Error("formal digital letterhead requires --org");
     if (args["copy-no"]) body.push(headerFieldParagraph(String(args["copy-no"]).padStart(6, "0"), "body"));
     if (args.secret) body.push(headerFieldParagraph(args.secret));
     if (args.urgent) body.push(headerFieldParagraph(args.urgent));
-    if (letterhead === "digital" && args.org) body.push(agencyMarkParagraph(args.org));
+    if (letterhead === "digital" && args.org) body.push(agencyMarkParagraph(args.org, "1984"));
     if (letterhead === "preprinted") {
       const reserve = Number(args["letterhead-reserve-mm"] ?? 72);
       if (!Number.isFinite(reserve) || reserve < 37 || reserve > 130) throw new Error("--letterhead-reserve-mm must be between 37 and 130");
-      body.push(paragraph("", { indent: false, before: String(Math.round((reserve - 37) * 56.7)), after: "0", fontPreset: "body" }));
+      body.push(letterheadReserveParagraph(reserve));
     }
     if (args["doc-no"]) body.push(documentNumberParagraph(args["doc-no"], upward));
     if (upward && args.signer) {
-      body.push(headerFieldParagraph(`签发人：${args.signer}`, "h2", { align: "right", right: FIRST_LINE_INDENT }));
+      body.push(signerParagraph(args.signer));
     }
     if (letterhead === "digital" || args["preprinted-rule"] === "true") body.push(redRule());
   } else if (format === "letter") {
     if (!args.org) throw new Error("letter format requires --org");
-    body.push(paragraph(args.org, { align: "center", indent: false, fontPreset: "title", size: "44", color: "FF0000", before: "4252", after: "227" }));
+    body.push(paragraph(args.org, { align: "center", indent: false, fontPreset: "title", size: "44", color: "FF0000", before: "0", after: "227" }));
     body.push(redRule());
     if (args["doc-no"]) body.push(headerFieldParagraph(args["doc-no"], "body", { align: "right" }));
   } else if (format === "command") {
     if (!args.org) throw new Error("command format requires --org");
-    body.push(paragraph(args.org, { align: "center", indent: false, fontPreset: "title", size: "44", color: "FF0000", before: "3402", after: "560" }));
+    body.push(paragraph(args.org, { align: "center", indent: false, fontPreset: "title", size: "44", color: "FF0000", before: "0", after: "560" }));
     if (args["doc-no"]) body.push(paragraph(args["doc-no"], { align: "center", indent: false, fontPreset: "body", size: "32", after: "560" }));
   } else if (format === "minutes") {
     if (!args.org) throw new Error("minutes format requires --org (for XXXXX纪要)");
-    body.push(paragraph(args.org, { align: "center", indent: false, fontPreset: "title", size: "44", color: "FF0000", before: "5953", after: "560" }));
+    body.push(paragraph(args.org, { align: "center", indent: false, fontPreset: "title", size: "44", color: "FF0000", before: "1984", after: "560" }));
   }
-  if (title) body.push(titleParagraph(title));
+  const hasRedRule = (formal && (letterhead === "digital" || letterhead === "preprinted" || args["preprinted-rule"] === "true")) || format === "letter";
+  if (title) body.push(titleParagraph(title, hasRedRule ? "1120" : "0"));
   if (args.subtitle) body.push(subtitleParagraph(args.subtitle));
   if (mainSend) body.push(mainSendParagraph(mainSend));
 
@@ -512,7 +564,7 @@ function buildDocument(blocks, args) {
     : pageNumberMode === "center"
       ? '<w:footerReference w:type="default" r:id="rIdFooterCenter"/>'
       : "";
-  body.push(`<w:sectPr>${footerRefs}<w:pgSz w:w="${PAGE_W}" w:h="${PAGE_H}"/><w:pgMar w:top="${MARGIN.top}" w:right="${MARGIN.right}" w:bottom="${MARGIN.bottom}" w:left="${MARGIN.left}" w:header="720" w:footer="1588" w:gutter="0"/><w:docGrid w:type="lines" w:linePitch="560"/></w:sectPr>`);
+  body.push(`<w:sectPr>${footerRefs}<w:pgSz w:w="${PAGE_W}" w:h="${PAGE_H}"/><w:pgMar w:top="${pageMarginTop}" w:right="${MARGIN.right}" w:bottom="${MARGIN.bottom}" w:left="${MARGIN.left}" w:header="720" w:footer="1588" w:gutter="0"/><w:docGrid w:type="lines" w:linePitch="560"/></w:sectPr>`);
   return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:v="urn:schemas-microsoft-com:vml"><w:body>${body.join("")}</w:body></w:document>`;
 }
 
@@ -613,13 +665,16 @@ if (args.help || !args.input || !args.output) {
   usage();
   process.exit(args.help ? 0 : 1);
 }
+try {
+  reportFontStatus(args);
+} catch (error) {
+  console.error(error.message);
+  process.exit(2);
+}
 const md = fs.readFileSync(args.input, "utf8");
 const blocks = parseMarkdown(md);
 const documentXml = buildDocument(blocks, args);
-const pageNumberMode = args["no-page-number"] || args["no-page-numbers"]
-  ? "none"
-  : ["center", "standard", "none"].includes(args["page-number"])
-    ? args["page-number"]
-    : "center";
+const format = ["ordinary", "formal", "letter", "command", "minutes"].includes(args.format) ? args.format : "ordinary";
+const pageNumberMode = resolvePageNumberMode(args, format);
 writeDocx(path.resolve(args.output), documentXml, pageNumberMode);
 console.log(`Generated: ${path.resolve(args.output)}`);

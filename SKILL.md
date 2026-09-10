@@ -25,7 +25,7 @@ GB/T 9704-2012《党政机关公文格式》现行，2025-05-30 复审继续有�
 node scripts/generate_gongwen_docx.mjs --input source.md --output output.docx --format ordinary --title "文档标题"
 ```
 
-普通材料使用 `--format ordinary`，默认居中页码，不绘制红头。正式发文须显式使用 `--format formal`；其默认 `--letterhead preprinted`，即首面预留红头纸区域、不在 DOCX 中重绘纸上已有的红色机关标志和红线。`--doc-no` 等本次需打印的黑色变量仍可保留。只有明确要求完整电子版时使用 `--letterhead digital`。
+普通材料使用 `--format ordinary`，默认居中页码，不绘制红头。正式发文须显式使用 `--format formal`；其默认 `--letterhead preprinted`，即首面预留红头纸区域、不在 DOCX 中重绘纸上已有的红色机关标志和红线。`--doc-no` 等本次需打印的黑色变量仍可保留。只有明确要求完整电子版时使用 `--letterhead digital`。完整电子红头要求目标环境存在可核对的小标宋体；生成器会在缺失时明确警告并记录实际替代字体，需要硬性阻止替代输出时加 `--require-standard-fonts`。红线下标题按28磅版心网格空二行。
 
 ```bash
 # 预印红头纸套打；72mm 是默认机关标志区域高度，可按实际纸样调为 37—130mm
@@ -37,7 +37,7 @@ node scripts/generate_gongwen_docx.mjs --input source.md --output output.docx --
 
 `letter`、`command`、`minutes` 分别对应信函、命令（令）、纪要格式；需要时显式传入 `--format` 和相应字段。正式发文默认单双页页码；`standard` 为单页右、双页左，`center` 与 `none` 供普通材料选择。
 
-Markdown 标题优先按序数识别：`一、`、`（一）`、`1.`、`（1）`；序数缺失时才按 Markdown 层级映射。正文、四级标题均左空二字，回行顶格。标题字体在运行机器缺失时，会保留请求的字体名；打开文件时仍须确认 Office 的实际替代字体，不把普通宋体视作小标宋的等价替代。
+Markdown 标题优先按序数识别：`一、`、`（一）`、`1.`、`（1）`；序数缺失时才按 Markdown 层级映射。正文、四级标题均左空二字，回行顶格。标题字体在运行机器缺失时会明确报告并使用可见替代字体；打开文件时仍须确认目标 Office/WPS 的实际字体，不把普通宋体视作小标宋的等价替代。
 
 ## 验证
 
@@ -45,6 +45,8 @@ Markdown 标题优先按序数识别：`一、`、`（一）`、`1.`、`（1）`
 unzip -t output.docx
 soffice --headless --convert-to pdf --outdir /tmp output.docx
 node scripts/verify_gongwen_docx.mjs --input output.docx --profile formal --letterhead preprinted
+# 目标电脑必须装有标准小标宋体和仿宋体时，再加严格字体校验
+node scripts/verify_gongwen_docx.mjs --input output.docx --profile formal --letterhead digital --require-standard-fonts
 ```
 
 校验器核验生成器可检查的版式要素，并按 `ordinary`、`formal`、`letter`、`command`、`minutes` 选择校验档案。输出后仍须在目标 Word/WPS 与实际打印条件下检查首页正文、分页、附件、表格、页码、红头纸套打和装订。
