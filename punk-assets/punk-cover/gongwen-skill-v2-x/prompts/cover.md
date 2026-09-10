@@ -1,0 +1,11 @@
+# 咨询报告视觉 cover prompt
+
+Create one X article cover image in a 5:2 wide horizontal ratio. Use the consulting-report visual language as a strict Swiss modernist editorial system. Build the entire image on an off-white matte paper field with a deep navy and cool-black typographic hierarchy, fine gray construction lines, one small ultramarine-blue accent, and generous but designed negative space.
+
+The article is about a public update to Gongwen Skill after a real red-letterhead failure revealed that a previous version generated an electronic red masthead and divider even when the practical workflow should reserve a blank top area for preprinted letterhead paper. The updated skill separates ordinary materials, preprinted-letterhead overprint output, and explicit electronic-letterhead output. It also writes four levels of actual Word and WPS heading styles so an automatic table of contents works.
+
+Use this title hierarchy in Simplified Chinese. A-layer main title must be fully readable and exact: 重新核对. B-layer complete title must be fully readable: Gongwen Skill 这次更新了什么. C-layer small report line: 红头纸套打、标题结构与 GB/T 9704-2012. Small edge label: OPEN SOURCE / 2026.
+
+Make the two large characters 重新 the visual center. Rebuild their strokes as a measured calibration path. A single ultramarine line crosses a white A4 sheet at the right, stops at a thin reserved top zone, then continues as a clean heading outline system below. The paper carries only abstract black text bars, four quiet structural heading levels and one small blue calibration point. The visual metaphor is a document being brought back onto its true grid after an incorrect red-header path has been removed. Do not show a real government emblem, a seal, a readable document number, a red masthead, or a literal printer.
+
+The main title must be embedded in the grid and structural path, not pasted on as a caption. Use a narrow report header and footer, a few tiny coordinate marks, hairline rules and a restrained field of perspective lines. Keep the composition more spacious than dense. Avoid a PPT layout, dashboard, explanatory infographic, office scene, generic AI art, gradients, cyberpunk effects, extra-bold social-poster text, fake dense data, misspelled Chinese, cropped titles, or unrelated decoration.

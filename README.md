@@ -56,6 +56,10 @@ https://github.com/mizzlelover/gongwen-gbt9704-skill
 
 https://std.samr.gov.cn/gb/search/gbDetailed?id=lOIe27f77QU%3D&mode=p
 
+## 最新更新
+
+新版将普通材料、预印红头纸套打和完整电子红头分开处理，并补入 Word/WPS 的四级标题样式。完整的更新说明、实测范围和配图见[这次更新说明](marketing/x-v2-release.md)。
+
 ## 作者与同名内容 IP
 
 这个项目由“谁是专家”持续维护。相关内容会记录 AI 工具、公文排版、正式材料和实际使用中的问题，欢迎从下面的入口找到我。
