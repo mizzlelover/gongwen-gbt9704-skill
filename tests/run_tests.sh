@@ -34,6 +34,24 @@ unzip -p "$TMP_DIR/digital.docx" word/document.xml | grep -q 'height:0.5mm'
 unzip -p "$TMP_DIR/digital.docx" word/document.xml | grep -q 'w:before="1984"'
 unzip -p "$TMP_DIR/digital.docx" word/document.xml | grep -q 'w:before="1120"'
 
+cat >"$TMP_DIR/attachment.md" <<'EOF'
+# 附件一：测试附件
+
+附件正文。
+EOF
+"$NODE" "$GEN" --input "$FIXTURE" --output "$TMP_DIR/upward.docx" --format formal --letterhead digital --org "示例单位文件" --doc-no "示例发〔2026〕1号" --title "上行文测试" --upward true --signer "张三"
+"$NODE" "$VERIFY" --input "$TMP_DIR/upward.docx" --profile formal --letterhead digital --upward true
+unzip -p "$TMP_DIR/upward.docx" word/document.xml | grep -q '签发人：'
+
+"$NODE" "$GEN" --input "$FIXTURE" --output "$TMP_DIR/letter.docx" --format letter --org "示例机关" --doc-no "示例〔2026〕1号" --title "信函测试"
+"$NODE" "$VERIFY" --input "$TMP_DIR/letter.docx" --profile letter
+unzip -l "$TMP_DIR/letter.docx" | grep -q 'word/footerLetter.xml'
+unzip -p "$TMP_DIR/letter.docx" word/footerLetter.xml | grep -q 'w:fill="FF0000"'
+
+"$NODE" "$GEN" --input "$FIXTURE" --output "$TMP_DIR/with-attachment.docx" --format formal --letterhead preprinted --letterhead-reserve-mm 72 --doc-no "示例发〔2026〕1号" --title "附件测试" --attachment-note "附件一：测试附件" --attachment-file "$TMP_DIR/attachment.md"
+unzip -p "$TMP_DIR/with-attachment.docx" word/document.xml | grep -q '附件一：测试附件'
+unzip -p "$TMP_DIR/with-attachment.docx" word/document.xml | grep -q 'w:pageBreakBefore'
+
 if "$NODE" "$GEN" --input "$FIXTURE" --output "$TMP_DIR/strict.docx" --format formal --letterhead digital --org "示例单位文件" --title "严格字体测试" --require-standard-fonts >"$TMP_DIR/strict.out" 2>&1; then
   if ! fc-list -f '%{family}\n' | grep -Eq '方正小标宋简体|方正小标宋_GBK|FZXiaoBiaoSong'; then
     echo "strict font mode unexpectedly succeeded without a small-standard-title font" >&2

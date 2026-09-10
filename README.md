@@ -104,7 +104,9 @@ node scripts/generate_gongwen_docx.mjs --input tests/fixture.md --output /tmp/fo
 node scripts/verify_gongwen_docx.mjs --input /tmp/formal.docx --profile formal --letterhead preprinted
 ```
 
-只有需要完整电子红头文件时，才加 `--letterhead digital`。红头和标题要使用目标电脑中实际安装的小标宋体；生成器缺少小标宋体或仿宋体时会在终端明确警告并写出替代字体，要求严格阻止替代输出时加 `--require-standard-fonts`。红线下标题会按版心网格预留两行，不会贴着分隔线。打开文档后，Word/WPS 的“引用→目录”可以按“标题1—标题4”生成并更新目录；是否显示第四级，在目录设置中选择。
+只有需要完整电子红头文件时，才加 `--letterhead digital`。红头和标题要使用目标电脑中实际安装的小标宋体；生成器缺少小标宋体或仿宋体时会在终端明确警告并写出替代字体，要求严格阻止替代输出时加 `--require-standard-fonts`。红线下标题会按版心网格预留两行，不会贴着分隔线；上行文的文号和签发人会在同一行编排。打开文档后，Word/WPS 的“引用→目录”可以按“标题1—标题4”生成并更新目录；是否显示第四级，在目录设置中选择。
+
+信函、命令（令）和纪要走专用分支：信函生成170mm上粗下细、下页边20mm处上细下粗的两条红色双线，底线放在页脚并关闭页码；命令（令）落实机关标志下空二行、令号下空二行；纪要把“出席”“请假”“列席”标签设为黑体、人员名单设为仿宋。附件可用重复的 `--attachment-file` 另页生成“附件”标签、第三行标题和正文，并保持正式页码连续。
 
 ## 跨平台安装
 

@@ -2,6 +2,8 @@
 
 import { execFileSync } from "node:child_process";
 import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 
 function usage() {
   console.log("Usage: node verify_gongwen_docx.mjs --input file.docx [--profile ordinary|formal|letter|command|minutes] [--letterhead preprinted|digital] [--require-standard-fonts]");
@@ -24,7 +26,7 @@ function parseArgs(argv) {
 }
 
 function readPart(file, part, optional = false) {
-  try { return execFileSync("unzip", ["-p", file, part], { encoding: "utf8" }); }
+  try { return execFileSync("unzip", ["-p", file, part], { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }); }
   catch (error) { if (optional) return ""; throw error; }
 }
 
@@ -40,7 +42,32 @@ const styles = readPart(args.input, "word/styles.xml");
 const footerOdd = readPart(args.input, "word/footerOdd.xml", true);
 const footerEven = readPart(args.input, "word/footerEven.xml", true);
 const footerCenter = readPart(args.input, "word/footerCenter.xml", true);
+const footerLetter = readPart(args.input, "word/footerLetter.xml", true);
 const requireStandardFonts = args["require-standard-fonts"] === true;
+const installedFonts = (() => {
+  try {
+    return new Set(execFileSync("fc-list", ["-f", "%{family}\n"], { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).split(/\r?\n/).flatMap((line) => line.split(",")).map((font) => font.trim()).filter(Boolean));
+  } catch {
+    const families = new Set();
+    const aliases = { simfang: "FangSong", simfangb: "FangSong_GB2312", fangsong: "FangSong", fangsong_gb2312: "FangSong_GB2312", "fzxiaobiaosong-b05s": "FZXiaoBiaoSong-B05S", "fzxiaobiaosong-b13s": "FZXiaoBiaoSong-B13S" };
+    const roots = [process.env.WINDIR ? path.join(process.env.WINDIR, "Fonts") : "", process.env.LOCALAPPDATA ? path.join(process.env.LOCALAPPDATA, "Microsoft", "Windows", "Fonts") : "", path.join(os.homedir(), "Library", "Fonts"), "/Library/Fonts", "/usr/share/fonts", "/usr/local/share/fonts"].filter(Boolean);
+    const walk = (dir) => {
+      let entries;
+      try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch { return; }
+      for (const entry of entries) {
+        const full = path.join(dir, entry.name);
+        if (entry.isDirectory()) walk(full);
+        else if (/\.(?:ttf|ttc|otf)$/i.test(entry.name)) {
+          const stem = path.basename(entry.name, path.extname(entry.name));
+          families.add(stem);
+          if (aliases[stem.toLowerCase()]) families.add(aliases[stem.toLowerCase()]);
+        }
+      }
+    };
+    roots.forEach(walk);
+    return families;
+  }
+})();
 const checks = [];
 function check(name, ok, detail) { checks.push({ name, ok, detail }); }
 
@@ -51,6 +78,10 @@ check("Document grid", /<w:docGrid[^>]*w:linePitch="560"/.test(doc), "28 pt impl
 const bodyFontStandard = /w:eastAsia="(?:仿宋|仿宋_GB2312|FangSong|FangSong_GB2312)"/.test(styles);
 const bodyFontAvailable = bodyFontStandard || (!requireStandardFonts && /w:eastAsia="STFangsong"/.test(styles));
 check("Default body font", bodyFontAvailable && /<w:sz w:val="32"/.test(styles), requireStandardFonts ? "3rd-size FangSong is required" : "3rd-size FangSong requested; STFangsong fallback is allowed unless strict mode is enabled");
+if (requireStandardFonts) {
+  check("Installed small-standard-title font", ["方正小标宋简体", "方正小标宋_GBK", "FZXiaoBiaoSong-B05S", "FZXiaoBiaoSong-B13S"].some((font) => installedFonts.has(font)), "target machine must provide a small-standard-title font");
+  check("Installed FangSong font", ["仿宋", "仿宋_GB2312", "FangSong", "FangSong_GB2312"].some((font) => installedFonts.has(font)), "target machine must provide a standard FangSong font");
+}
 check("Heading styles", [1, 2, 3, 4].every((level) => new RegExp(`w:styleId="Heading${level}"`).test(styles)), "Heading 1 through Heading 4 are defined");
 
 const textOf = (xml) => xml.replace(/<[^>]+>/g, "");
@@ -74,7 +105,9 @@ if (profile === "ordinary") {
   check("No formal red-head drawing", !/w:color w:val="FF0000"/.test(doc), "ordinary output has no red head or red rule");
   check("Centered layout footer", /w:jc w:val="center"/.test(footerCenter) && /w:instr="PAGE"/.test(footerCenter), "ordinary output uses centered page number");
 } else if (profile === "letter") {
-  check("Letter first-page page number", !footerCenter && !footerOdd && !footerEven, "letter test output suppresses first-page page number");
+  check("Letter first-page page number", !footerCenter && !footerOdd && !footerEven && !/w:instr="PAGE"/.test(footerLetter), "letter output suppresses page numbers");
+  check("Letter upper red double rule", (footerLetter.match(/w:fill="FF0000"/g) ?? []).length >= 2 && /w:tblW[^>]*w:w="9638"/.test(doc), "letter output contains 170 mm red double rules");
+  check("Letter bottom rule footer", /rIdLetterFooter/.test(doc) && /w:footer="1134"/.test(doc), "bottom red double rule is anchored 20 mm from the paper edge");
 } else {
   check("Odd/even page fields", /w:instr="PAGE"/.test(footerOdd) && /w:instr="PAGE"/.test(footerEven), "odd and even page footers exist");
   check("Odd/even page positions", /w:jc w:val="right"/.test(footerOdd) && /w:jc w:val="left"/.test(footerEven), "odd right and even left");
@@ -83,8 +116,16 @@ if (profile === "formal") {
   if (args.letterhead === "digital") {
     check("Digital red head", /w:color w:val="FF0000"/.test(doc), "digital formal output contains requested red elements");
     check("Red rule thickness", /height:0\.5mm/.test(doc), "header separator uses the recommended 0.35-0.5 mm range");
-    check("Digital red-head agency position", /w:before="1984"/.test(doc), "agency mark starts 35 mm below the type-area top");
+    check("Red rule width", /style="width:156mm;height:0\.5mm"/.test(doc), "header separator spans the 156 mm type area");
+    const docParagraphs = paragraphs(doc);
+    const agencyIndex = docParagraphs.findIndex((p) => /w:sz w:val="56"/.test(p) && /w:color w:val="FF0000"/.test(p));
+    const headerFieldCount = agencyIndex < 0 ? 0 : docParagraphs.slice(0, agencyIndex).filter((p) => /\d{6}|机密|秘密|特急|加急/.test(textOf(p))).length;
+    const expectedAgencyBefore = 1984 - headerFieldCount * 560;
+    check("Digital red-head agency position", new RegExp(`w:before="${expectedAgencyBefore}"`).test(doc), `agency mark starts 35 mm below the type-area top after ${headerFieldCount} header field line(s)`);
     check("Two blank lines below red rule", titleParagraphs.some((p) => /w:before="1120"/.test(p)), "title paragraph reserves two 28-point grid lines below the red rule");
+    if (args.upward === "true") {
+      check("Upward document number and signer share one row", paragraphs(doc).some((p) => /签发人：/.test(textOf(p)) && /〔|\[|文号|发/.test(textOf(p))), "signer is in the same paragraph row as the document number");
+    }
   } else {
     check("Preprinted letterhead reserve", /w:before="\d{4,}"/.test(doc), "first-page top reserve is present");
     check("No red drawing for preprinted letterhead", !/w:color w:val="FF0000"/.test(doc), "preprinted mode does not redraw red letterhead or rule");
@@ -93,6 +134,21 @@ if (profile === "formal") {
 }
 if (profile === "letter") {
   check("Letter title spacing", titleParagraphs.some((p) => /w:before="1120"/.test(p)), "title paragraph reserves two 28-point grid lines below the red rule");
+}
+if (profile === "command") {
+  check("Command agency-to-order spacing", /w:after="1120"/.test(paragraphs(doc)[0] ?? ""), "command agency mark is followed by two blank lines");
+  check("Command order-to-body spacing", paragraphs(doc).slice(1).some((p) => /w:after="1120"/.test(p) && /w:jc w:val="center"/.test(p)), "command number is followed by two blank lines");
+}
+if (profile === "minutes") {
+  const attendance = paragraphs(doc).filter((p) => /(?:出席|请假|列席)：/.test(textOf(p)));
+  check("Minutes attendance label font", attendance.every((p) => /w:eastAsia="(?:黑体|SimHei|Heiti SC|STHeiti)"/.test(p)), attendance.length ? `${attendance.length} attendance paragraph(s)` : "not present in this document");
+  check("Minutes attendee font", attendance.every((p) => /w:eastAsia="(?:仿宋|仿宋_GB2312|FangSong|FangSong_GB2312|STFangsong)"/.test(p)), attendance.length ? "people runs use FangSong" : "not present in this document");
+}
+const redRules = doc.match(/height:(?:0\.35|0\.25|0\.5)mm/g) ?? [];
+if (["formal", "command", "minutes"].includes(profile)) {
+  const hasColophon = /抄送：|印发/.test(textOf(doc));
+  check("Colophon line thickness model", !hasColophon || (redRules.includes("height:0.35mm") && redRules.includes("height:0.25mm")), "版记粗线0.35 mm、细线0.25 mm");
+  if (hasColophon) check("Colophon print-row right tab", /w:tab w:val="right"/.test(doc), "印发机关和日期使用右制表位");
 }
 
 for (const item of checks) console.log(`${item.ok ? "PASS" : "FAIL"}  ${item.name}: ${item.detail}`);

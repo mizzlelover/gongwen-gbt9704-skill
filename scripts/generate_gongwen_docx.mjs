@@ -20,7 +20,41 @@ function installedFontFamilies() {
         .filter(Boolean),
     );
   } catch {
-    return new Set();
+    const families = new Set();
+    const aliases = {
+      simfang: "FangSong",
+      simfangb: "FangSong_GB2312",
+      "方正小标宋简体": "方正小标宋简体",
+      "方正小标宋_GBK": "方正小标宋_GBK",
+      "fzxiaobiaosong-b05s": "FZXiaoBiaoSong-B05S",
+      "fzxiaobiaosong-b13s": "FZXiaoBiaoSong-B13S",
+      fangsong: "FangSong",
+      fangsong_gb2312: "FangSong_GB2312",
+    };
+    const roots = [
+      process.env.WINDIR ? path.join(process.env.WINDIR, "Fonts") : "",
+      process.env.LOCALAPPDATA ? path.join(process.env.LOCALAPPDATA, "Microsoft", "Windows", "Fonts") : "",
+      path.join(os.homedir(), "Library", "Fonts"),
+      "/Library/Fonts",
+      "/usr/share/fonts",
+      "/usr/local/share/fonts",
+    ].filter(Boolean);
+    const walk = (dir) => {
+      let entries;
+      try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch { return; }
+      for (const entry of entries) {
+        const full = path.join(dir, entry.name);
+        if (entry.isDirectory()) walk(full);
+        else if (/\.(?:ttf|ttc|otf)$/i.test(entry.name)) {
+          const stem = path.basename(entry.name, path.extname(entry.name));
+          families.add(stem);
+          const alias = aliases[stem.toLowerCase()];
+          if (alias) families.add(alias);
+        }
+      }
+    };
+    roots.forEach(walk);
+    return families;
   }
 }
 
@@ -62,7 +96,7 @@ function reportFontStatus(args) {
 
 function usage() {
   console.log(`Usage:
-  node generate_gongwen_docx.mjs --input source.md --output out.docx [--format ordinary|formal|letter|command|minutes] [--letterhead preprinted|digital] [--org 发文机关] [--doc-no 发文字号] [--title 标题] [--subtitle 副标题] [--to 主送机关] [--sender 落款] [--date 日期] [--page-number center|standard|none] [--require-standard-fonts]
+  node generate_gongwen_docx.mjs --input source.md --output out.docx [--format ordinary|formal|letter|command|minutes] [--letterhead preprinted|digital] [--org 发文机关] [--doc-no 发文字号] [--title 标题] [--subtitle 副标题] [--to 主送机关] [--sender 落款] [--date 日期] [--attachment-note 附件说明] [--attachment-file attachment.md ...] [--page-number center|standard|none] [--require-standard-fonts]
 
 Notes:
   - Converts Markdown to a GB/T 9704-2012 page-layout DOCX.
@@ -71,13 +105,14 @@ Notes:
   - letter, command and minutes use their dedicated national-standard layout branches. Their required fields must be supplied explicitly.
   - --org and --doc-no are printed exactly as supplied. The tool formats document content; it does not infer missing information or decide the document's use.
   - The generator reports when the required small-standard-title or FangSong font is unavailable and uses a visible fallback. Add --require-standard-fonts to refuse generation until the required font is installed.
-  - Supports headings, paragraphs, ordered/unordered lines, and pipe tables.
+  - Supports headings, paragraphs, ordered/unordered lines, pipe tables, and repeatable Markdown attachment pages via --attachment-file.
   - No npm dependencies; requires zip in PATH.`);
 }
 
 function parseArgs(argv) {
   const args = {};
   const flags = new Set(["help", "no-page-number", "no-page-numbers", "require-standard-fonts"]);
+  const repeatable = new Set(["attachment-file"]);
   for (let i = 2; i < argv.length; i += 1) {
     const key = argv[i];
     if (!key.startsWith("--")) continue;
@@ -86,7 +121,11 @@ function parseArgs(argv) {
       args[name] = true;
       continue;
     }
-    args[name] = argv[i + 1];
+    if (repeatable.has(name)) {
+      args[name] = [...(args[name] ?? []), argv[i + 1]];
+    } else {
+      args[name] = argv[i + 1];
+    }
     i += 1;
   }
   return args;
@@ -196,6 +235,11 @@ function documentNumberParagraph(text, upward = false) {
   });
 }
 
+function upwardHeaderParagraph(docNo, signer) {
+  const tabPosition = CONTENT_W - FIRST_LINE_INDENT;
+  return `<w:p><w:pPr><w:jc w:val="both"/><w:ind w:left="${FIRST_LINE_INDENT}" w:right="${FIRST_LINE_INDENT}"/><w:tabs><w:tab w:val="right" w:pos="${tabPosition}"/></w:tabs><w:spacing w:before="0" w:after="227" w:line="560" w:lineRule="exact"/><w:adjustRightInd w:val="true"/><w:snapToGrid w:val="true"/><w:kinsoku w:val="true"/></w:pPr>${run(docNo, { fontPreset: "body", size: "32" })}<w:r><w:tab/></w:r>${run("签发人：", { fontPreset: "body", size: "32" })}${run(signer, { fontPreset: "h2", size: "32" })}</w:p>`;
+}
+
 function subtitleParagraph(text) {
   return paragraph(text, {
     align: "center",
@@ -213,6 +257,11 @@ function mainSendParagraph(text) {
     fontPreset: "body",
     size: "32",
   });
+}
+
+function normalizeMainSend(text) {
+  const value = String(text ?? "").trim();
+  return value && /[:：]$/.test(value) ? value : `${value}：`;
 }
 
 function h1(text) {
@@ -272,16 +321,27 @@ function right(text) {
 }
 
 function redRule(thickness = "5") {
-  const height = thickness === "5" ? "0.5mm" : "0.35mm";
+  const height = thickness === "thick" ? "0.35mm" : thickness === "thin" ? "0.25mm" : "0.5mm";
   return `<w:p><w:pPr><w:spacing w:before="0" w:after="0" w:line="80" w:lineRule="exact"/></w:pPr><w:r><w:rPr><w:color w:val="FF0000"/></w:rPr><w:pict><v:rect xmlns:v="urn:schemas-microsoft-com:vml" style="width:156mm;height:${height}" fillcolor="#FF0000" stroked="f"/></w:pict></w:r></w:p>`;
+}
+
+function mmToDxa(mm) {
+  return Math.round(Number(mm) * 1440 / 25.4);
+}
+
+function redDoubleRule({ upperMm = "0.35", lowerMm = "0.25", widthMm = "170" } = {}) {
+  const width = mmToDxa(widthMm);
+  const row = (heightMm) => `<w:tr><w:trPr><w:trHeight w:val="${mmToDxa(heightMm)}" w:hRule="exact"/></w:trPr><w:tc><w:tcPr><w:tcW w:w="${width}" w:type="dxa"/><w:shd w:val="clear" w:color="FF0000" w:fill="FF0000"/><w:tcMar><w:top w:w="0" w:type="dxa"/><w:left w:w="0" w:type="dxa"/><w:bottom w:w="0" w:type="dxa"/><w:right w:w="0" w:type="dxa"/></w:tcMar></w:tcPr><w:p><w:pPr><w:spacing w:before="0" w:after="0" w:line="1" w:lineRule="exact"/></w:pPr><w:r><w:rPr><w:sz w:val="2"/></w:rPr><w:t xml:space="preserve"> </w:t></w:r></w:p></w:tc></w:tr>`;
+  const spacer = `<w:tr><w:trPr><w:trHeight w:val="${mmToDxa("3")}" w:hRule="exact"/></w:trPr><w:tc><w:tcPr><w:tcW w:w="${width}" w:type="dxa"/><w:tcMar><w:top w:w="0" w:type="dxa"/><w:left w:w="0" w:type="dxa"/><w:bottom w:w="0" w:type="dxa"/><w:right w:w="0" w:type="dxa"/></w:tcMar></w:tcPr><w:p><w:pPr><w:spacing w:before="0" w:after="0" w:line="1" w:lineRule="exact"/></w:pPr></w:p></w:tc></w:tr>`;
+  return `<w:tbl><w:tblPr><w:tblW w:w="${width}" w:type="dxa"/><w:jc w:val="center"/><w:tblBorders><w:top w:val="nil"/><w:left w:val="nil"/><w:bottom w:val="nil"/><w:right w:val="nil"/><w:insideH w:val="nil"/><w:insideV w:val="nil"/></w:tblBorders><w:tblCellMar><w:top w:w="0" w:type="dxa"/><w:left w:w="0" w:type="dxa"/><w:bottom w:w="0" w:type="dxa"/><w:right w:w="0" w:type="dxa"/></w:tblCellMar></w:tblPr><w:tblGrid><w:gridCol w:w="${width}"/></w:tblGrid>${row(upperMm)}${spacer}${row(lowerMm)}</w:tbl>`;
+}
+
+function minutesPersonParagraph(label, people, before = "0") {
+  return `<w:p><w:pPr><w:jc w:val="left"/><w:ind w:firstLine="0"/><w:spacing w:before="${before}" w:after="0" w:line="560" w:lineRule="exact"/><w:adjustRightInd w:val="true"/><w:snapToGrid w:val="true"/><w:kinsoku w:val="true"/></w:pPr>${run(`${label}：`, { fontPreset: "h1", size: "32" })}${run(people, { fontPreset: "body", size: "32" })}</w:p>`;
 }
 
 function headerFieldParagraph(text, fontPreset = "h1", opts = {}) {
   return paragraph(text, { align: opts.align ?? "left", indent: false, fontPreset, size: "32", after: opts.after ?? "0", left: opts.left, right: opts.right });
-}
-
-function signerParagraph(name) {
-  return `<w:p><w:pPr><w:jc w:val="right"/><w:ind w:right="${FIRST_LINE_INDENT}"/><w:spacing w:before="0" w:after="0" w:line="560" w:lineRule="exact"/><w:adjustRightInd w:val="true"/><w:snapToGrid w:val="true"/><w:kinsoku w:val="true"/></w:pPr>${run("签发人：", { fontPreset: "body", size: "32" })}${run(name, { fontPreset: "h2", size: "32" })}</w:p>`;
 }
 
 function attachmentNote(text) {
@@ -290,15 +350,15 @@ function attachmentNote(text) {
 
 function colophon(args) {
   if (!args["cc"] && !args["print-org"] && !args["print-date"]) return [];
-  const body = [redRule("5")];
+  const body = [redRule("thick")];
   if (args.cc) body.push(paragraph(`抄送：${args.cc.replace(/[。.]?$/, "")}。`, { align: "left", indent: false, left: "320", right: "320", fontPreset: "body", size: "28" }));
-  if (args.cc) body.push(redRule("2"));
+  if (args.cc) body.push(redRule("thin"));
   if (args["print-org"] || args["print-date"]) {
     const left = args["print-org"] ?? "";
     const rightValue = args["print-date"] ? `${args["print-date"].replace(/印发$/, "")}印发` : "";
-    body.push(`<w:p><w:pPr><w:jc w:val="both"/><w:ind w:left="320" w:right="320"/><w:spacing w:before="0" w:after="0" w:line="560" w:lineRule="exact"/></w:pPr>${run(left, { fontPreset: "body", size: "28" })}<w:r><w:tab/></w:r>${run(rightValue, { fontPreset: "body", size: "28" })}</w:p>`);
+    body.push(`<w:p><w:pPr><w:jc w:val="both"/><w:ind w:left="320" w:right="320"/><w:tabs><w:tab w:val="right" w:pos="${CONTENT_W - 320}"/></w:tabs><w:spacing w:before="0" w:after="0" w:line="560" w:lineRule="exact"/></w:pPr>${run(left, { fontPreset: "body", size: "28" })}<w:r><w:tab/></w:r>${run(rightValue, { fontPreset: "body", size: "28" })}</w:p>`);
   }
-  body.push(redRule("5"));
+  body.push(redRule("thick"));
   return body;
 }
 
@@ -463,6 +523,25 @@ function renderParagraph(block) {
   return paragraph(block.text);
 }
 
+function attachmentPage(blocks, index, filePath) {
+  const attachmentBlocks = [...blocks];
+  let attachmentTitle = path.basename(filePath, path.extname(filePath));
+  if (attachmentBlocks[0]?.type === "heading") {
+    attachmentTitle = attachmentBlocks.shift().text;
+  }
+  const body = [
+    paragraph(`附件${index}`, { align: "left", indent: false, fontPreset: "h1", size: "32", pageBreakBefore: true, keepNext: true }),
+    emptyLine(),
+    titleParagraph(attachmentTitle),
+  ];
+  for (const block of attachmentBlocks) {
+    if (block.type === "heading") body.push(renderHeading(block));
+    else if (block.type === "table") body.push(tableXml(block.headers, block.rows), emptyLine());
+    else body.push(renderParagraph(block));
+  }
+  return body.join("");
+}
+
 function resolvePageNumberMode(args, format) {
   if (args["no-page-number"] || args["no-page-numbers"]) return "none";
   if (["center", "standard", "none"].includes(args["page-number"])) return args["page-number"];
@@ -491,33 +570,34 @@ function buildDocument(blocks, args) {
   if (!mainSend && sourceBlocks[0]?.type === "paragraph" && looksLikeMainSend(sourceBlocks[0].text)) {
     mainSend = sourceBlocks.shift().text;
   }
+  if (mainSend) mainSend = normalizeMainSend(mainSend);
   const upward = args["upward"] === "true" || args["upward"] === true;
   const formal = format === "formal";
   if (formal) {
     if (letterhead === "digital" && !args.org) throw new Error("formal digital letterhead requires --org");
+    const headerFieldCount = [args["copy-no"], args.secret, args.urgent].filter(Boolean).length;
+    if (args["copy-no"] && !/^\d{1,6}$/.test(String(args["copy-no"]))) throw new Error("--copy-no must contain one to six Arabic digits");
     if (args["copy-no"]) body.push(headerFieldParagraph(String(args["copy-no"]).padStart(6, "0"), "body"));
     if (args.secret) body.push(headerFieldParagraph(args.secret));
     if (args.urgent) body.push(headerFieldParagraph(args.urgent));
-    if (letterhead === "digital" && args.org) body.push(agencyMarkParagraph(args.org, "1984"));
+    if (letterhead === "digital" && args.org) body.push(agencyMarkParagraph(args.org, String(Math.max(0, 1984 - headerFieldCount * 560))));
     if (letterhead === "preprinted") {
       const reserve = Number(args["letterhead-reserve-mm"] ?? 72);
       if (!Number.isFinite(reserve) || reserve < 37 || reserve > 130) throw new Error("--letterhead-reserve-mm must be between 37 and 130");
-      body.push(letterheadReserveParagraph(reserve));
+      body.push(letterheadReserveParagraph(Math.max(37, reserve - headerFieldCount * 9.877)));
     }
-    if (args["doc-no"]) body.push(documentNumberParagraph(args["doc-no"], upward));
-    if (upward && args.signer) {
-      body.push(signerParagraph(args.signer));
-    }
+    if (upward && args["doc-no"] && args.signer) body.push(upwardHeaderParagraph(args["doc-no"], args.signer));
+    else if (args["doc-no"]) body.push(documentNumberParagraph(args["doc-no"], upward));
     if (letterhead === "digital" || args["preprinted-rule"] === "true") body.push(redRule());
   } else if (format === "letter") {
     if (!args.org) throw new Error("letter format requires --org");
     body.push(paragraph(args.org, { align: "center", indent: false, fontPreset: "title", size: "44", color: "FF0000", before: "0", after: "227" }));
-    body.push(redRule());
+    body.push(redDoubleRule({ upperMm: "0.35", lowerMm: "0.25" }));
     if (args["doc-no"]) body.push(headerFieldParagraph(args["doc-no"], "body", { align: "right" }));
   } else if (format === "command") {
     if (!args.org) throw new Error("command format requires --org");
-    body.push(paragraph(args.org, { align: "center", indent: false, fontPreset: "title", size: "44", color: "FF0000", before: "0", after: "560" }));
-    if (args["doc-no"]) body.push(paragraph(args["doc-no"], { align: "center", indent: false, fontPreset: "body", size: "32", after: "560" }));
+    body.push(paragraph(args.org, { align: "center", indent: false, fontPreset: "title", size: "44", color: "FF0000", before: "0", after: "1120" }));
+    if (args["doc-no"]) body.push(paragraph(args["doc-no"], { align: "center", indent: false, fontPreset: "body", size: "32", after: "1120" }));
   } else if (format === "minutes") {
     if (!args.org) throw new Error("minutes format requires --org (for XXXXX纪要)");
     body.push(paragraph(args.org, { align: "center", indent: false, fontPreset: "title", size: "44", color: "FF0000", before: "1984", after: "560" }));
@@ -555,16 +635,25 @@ function buildDocument(blocks, args) {
     }
   }
   if (args.note) body.push(paragraph(`（${args.note.replace(/^（|）$/g, "")}）`, { align: "left", fontPreset: "body", size: "32" }));
-  if (format === "minutes" && args.attendees) body.push(paragraph(`出席：${args.attendees}`, { align: "left", fontPreset: "body", size: "32", before: "560" }));
-  if (format === "minutes" && args.absent) body.push(paragraph(`请假：${args.absent}`, { align: "left", fontPreset: "body", size: "32" }));
-  if (format === "minutes" && args.observers) body.push(paragraph(`列席：${args.observers}`, { align: "left", fontPreset: "body", size: "32" }));
+  const attachmentFiles = Array.isArray(args["attachment-file"]) ? args["attachment-file"] : args["attachment-file"] ? [args["attachment-file"]] : [];
+  attachmentFiles.forEach((filePath, index) => {
+    const absolutePath = path.resolve(filePath);
+    if (!fs.existsSync(absolutePath)) throw new Error(`attachment file not found: ${filePath}`);
+    const attachmentBlocks = parseMarkdown(fs.readFileSync(absolutePath, "utf8"));
+    body.push(attachmentPage(attachmentBlocks, index + 1, absolutePath));
+  });
+  if (format === "minutes" && args.attendees) body.push(minutesPersonParagraph("出席", args.attendees, "560"));
+  if (format === "minutes" && args.absent) body.push(minutesPersonParagraph("请假", args.absent));
+  if (format === "minutes" && args.observers) body.push(minutesPersonParagraph("列席", args.observers));
   if (format !== "letter") body.push(...colophon(args));
-  const footerRefs = pageNumberMode === "standard"
+  const letterFooter = format === "letter" ? '<w:footerReference w:type="default" r:id="rIdLetterFooter"/>' : "";
+  const footerRefs = letterFooter || (pageNumberMode === "standard"
     ? '<w:footerReference w:type="default" r:id="rIdFooterOdd"/><w:footerReference w:type="even" r:id="rIdFooterEven"/>'
     : pageNumberMode === "center"
       ? '<w:footerReference w:type="default" r:id="rIdFooterCenter"/>'
-      : "";
-  body.push(`<w:sectPr>${footerRefs}<w:pgSz w:w="${PAGE_W}" w:h="${PAGE_H}"/><w:pgMar w:top="${pageMarginTop}" w:right="${MARGIN.right}" w:bottom="${MARGIN.bottom}" w:left="${MARGIN.left}" w:header="720" w:footer="1588" w:gutter="0"/><w:docGrid w:type="lines" w:linePitch="560"/></w:sectPr>`);
+      : "");
+  const footerDistance = format === "letter" ? "1134" : "1588";
+  body.push(`<w:sectPr>${footerRefs}<w:pgSz w:w="${PAGE_W}" w:h="${PAGE_H}"/><w:pgMar w:top="${pageMarginTop}" w:right="${MARGIN.right}" w:bottom="${MARGIN.bottom}" w:left="${MARGIN.left}" w:header="720" w:footer="${footerDistance}" w:gutter="0"/><w:docGrid w:type="lines" w:linePitch="560"/></w:sectPr>`);
   return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:v="urn:schemas-microsoft-com:vml"><w:body>${body.join("")}</w:body></w:document>`;
 }
 
@@ -618,38 +707,48 @@ function footerXml(align = "center") {
   return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:ftr xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:p><w:pPr><w:jc w:val="${align}"/>${sideIndent}<w:spacing w:before="0" w:after="0"/></w:pPr><w:r>${pageRunProps}<w:t xml:space="preserve">— </w:t></w:r><w:fldSimple w:instr="PAGE"><w:r>${pageRunProps}<w:t>1</w:t></w:r></w:fldSimple><w:r>${pageRunProps}<w:t xml:space="preserve"> —</w:t></w:r></w:p></w:ftr>`;
 }
 
+function letterFooterXml() {
+  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:ftr xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">${redDoubleRule({ upperMm: "0.25", lowerMm: "0.35" })}</w:ftr>`;
+}
+
 function settingsXml(pageNumberMode) {
   const evenOdd = pageNumberMode === "standard" ? "<w:evenAndOddHeaders/>" : "";
   return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:settings xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">${evenOdd}<w:updateFields w:val="true"/></w:settings>`;
 }
 
-function documentRelsXml(pageNumberMode) {
-  const footerRels = pageNumberMode === "standard"
+function documentRelsXml(pageNumberMode, format) {
+  const footerRels = format === "letter"
+    ? '<Relationship Id="rIdLetterFooter" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/footer" Target="footerLetter.xml"/>'
+    : pageNumberMode === "standard"
     ? '<Relationship Id="rIdFooterOdd" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/footer" Target="footerOdd.xml"/><Relationship Id="rIdFooterEven" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/footer" Target="footerEven.xml"/>'
-    : pageNumberMode === "center"
-      ? '<Relationship Id="rIdFooterCenter" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/footer" Target="footerCenter.xml"/>'
+      : pageNumberMode === "center"
+        ? '<Relationship Id="rIdFooterCenter" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/footer" Target="footerCenter.xml"/>'
       : "";
   return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rIdStyles" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/><Relationship Id="rIdFontTable" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/fontTable" Target="fontTable.xml"/><Relationship Id="rIdSettings" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/settings" Target="settings.xml"/>${footerRels}</Relationships>`;
 }
 
-function writeDocx(output, documentXml, pageNumberMode) {
+function writeDocx(output, documentXml, pageNumberMode, format) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "gongwen-docx-"));
   fs.mkdirSync(path.join(dir, "_rels"), { recursive: true });
   fs.mkdirSync(path.join(dir, "word"), { recursive: true });
   fs.mkdirSync(path.join(dir, "word/_rels"), { recursive: true });
-  const footerTypes = pageNumberMode === "standard"
+  const footerTypes = format === "letter"
+    ? '<Override PartName="/word/footerLetter.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.footer+xml"/>'
+    : pageNumberMode === "standard"
     ? '<Override PartName="/word/footerOdd.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.footer+xml"/><Override PartName="/word/footerEven.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.footer+xml"/>'
-    : pageNumberMode === "center"
-      ? '<Override PartName="/word/footerCenter.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.footer+xml"/>'
+      : pageNumberMode === "center"
+        ? '<Override PartName="/word/footerCenter.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.footer+xml"/>'
       : "";
   fs.writeFileSync(path.join(dir, "[Content_Types].xml"), `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/><Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/><Override PartName="/word/fontTable.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.fontTable+xml"/><Override PartName="/word/settings.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.settings+xml"/>${footerTypes}</Types>`);
   fs.writeFileSync(path.join(dir, "_rels/.rels"), `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/></Relationships>`);
-  fs.writeFileSync(path.join(dir, "word/_rels/document.xml.rels"), documentRelsXml(pageNumberMode));
+  fs.writeFileSync(path.join(dir, "word/_rels/document.xml.rels"), documentRelsXml(pageNumberMode, format));
   fs.writeFileSync(path.join(dir, "word/document.xml"), documentXml);
   fs.writeFileSync(path.join(dir, "word/styles.xml"), stylesXml());
   fs.writeFileSync(path.join(dir, "word/fontTable.xml"), fontTableXml());
   fs.writeFileSync(path.join(dir, "word/settings.xml"), settingsXml(pageNumberMode));
-  if (pageNumberMode === "standard") {
+  if (format === "letter") {
+    fs.writeFileSync(path.join(dir, "word/footerLetter.xml"), letterFooterXml());
+  } else if (pageNumberMode === "standard") {
     fs.writeFileSync(path.join(dir, "word/footerOdd.xml"), footerXml("right"));
     fs.writeFileSync(path.join(dir, "word/footerEven.xml"), footerXml("left"));
   } else if (pageNumberMode === "center") {
@@ -672,9 +771,14 @@ try {
   process.exit(2);
 }
 const md = fs.readFileSync(args.input, "utf8");
-const blocks = parseMarkdown(md);
-const documentXml = buildDocument(blocks, args);
-const format = ["ordinary", "formal", "letter", "command", "minutes"].includes(args.format) ? args.format : "ordinary";
-const pageNumberMode = resolvePageNumberMode(args, format);
-writeDocx(path.resolve(args.output), documentXml, pageNumberMode);
-console.log(`Generated: ${path.resolve(args.output)}`);
+try {
+  const blocks = parseMarkdown(md);
+  const documentXml = buildDocument(blocks, args);
+  const format = ["ordinary", "formal", "letter", "command", "minutes"].includes(args.format) ? args.format : "ordinary";
+  const pageNumberMode = resolvePageNumberMode(args, format);
+  writeDocx(path.resolve(args.output), documentXml, pageNumberMode, format);
+  console.log(`Generated: ${path.resolve(args.output)}`);
+} catch (error) {
+  console.error(`GENERATOR ERROR: ${error.message}`);
+  process.exit(2);
+}
