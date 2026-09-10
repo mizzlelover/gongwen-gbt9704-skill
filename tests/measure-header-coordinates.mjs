@@ -20,16 +20,41 @@ function decodeHtml(value) {
 
 function words(pdf) {
   const html = execFileSync("pdftotext", ["-f", "1", "-l", "1", "-bbox-layout", pdf, "-"], { encoding: "utf8" });
-  return [...html.matchAll(/<word\s+[^>]*yMin="([0-9.]+)"[^>]*>([\s\S]*?)<\/word>/g)].map((match) => ({
-    yMinPt: Number(match[1]),
-    text: decodeHtml(match[2]),
+  return [...html.matchAll(/<word\s+[^>]*xMin="([0-9.]+)"[^>]*yMin="([0-9.]+)"[^>]*xMax="([0-9.]+)"[^>]*>([\s\S]*?)<\/word>/g)].map((match) => ({
+    xMinPt: Number(match[1]),
+    yMinPt: Number(match[2]),
+    xMaxPt: Number(match[3]),
+    text: decodeHtml(match[4]),
   }));
 }
 
-function findWord(pdfWords, expected) {
-  const word = pdfWords.find(({ text }) => text.includes(expected));
-  if (!word) throw new Error(`${expected} was not found on the first page`);
-  return word;
+function findText(pdfWords, expected) {
+  // Poppler can split a Chinese phrase into adjacent <word> elements depending
+  // on the installed font. Rebuild visual rows before matching so the
+  // measurement is independent of that tokenization choice.
+  const rows = [];
+  for (const word of [...pdfWords].sort((left, right) => left.yMinPt - right.yMinPt || left.xMinPt - right.xMinPt)) {
+    const row = rows.find(({ yMinPt }) => Math.abs(yMinPt - word.yMinPt) <= 1.5);
+    if (row) row.words.push(word);
+    else rows.push({ yMinPt: word.yMinPt, words: [word] });
+  }
+  for (const row of rows) {
+    const ordered = row.words.sort((left, right) => left.xMinPt - right.xMinPt);
+    const text = ordered.map(({ text }) => text).join("");
+    const start = text.indexOf(expected);
+    if (start < 0) continue;
+    const matchingWords = [];
+    let offset = 0;
+    for (const word of ordered) {
+      const end = offset + word.text.length;
+      if (end > start && offset < start + expected.length) matchingWords.push(word);
+      offset = end;
+    }
+    return {
+      yMinPt: Math.min(...matchingWords.map(({ yMinPt }) => yMinPt)),
+    };
+  }
+  throw new Error(`${expected} was not found on the first page`);
 }
 
 function mm(word) {
@@ -38,9 +63,9 @@ function mm(word) {
 
 const withFields = words(withFieldsPdf);
 const withoutFields = words(withoutFieldsPdf);
-const copy = findWord(withFields, copyNo);
-const agencyWithFields = findWord(withFields, agencyName);
-const agencyWithoutFields = findWord(withoutFields, agencyName);
+const copy = findText(withFields, copyNo);
+const agencyWithFields = findText(withFields, agencyName);
+const agencyWithoutFields = findText(withoutFields, agencyName);
 const copyMm = mm(copy);
 const agencyWithFieldsMm = mm(agencyWithFields);
 const agencyWithoutFieldsMm = mm(agencyWithoutFields);
