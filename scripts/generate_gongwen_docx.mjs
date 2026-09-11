@@ -134,10 +134,14 @@ function parseArgs(argv) {
       args[name] = true;
       continue;
     }
+    const value = argv[i + 1];
+    if (value === undefined || value.startsWith("--")) {
+      throw new Error(`--${name} requires a value`);
+    }
     if (repeatable.has(name)) {
-      args[name] = [...(args[name] ?? []), argv[i + 1]];
+      args[name] = [...(args[name] ?? []), value];
     } else {
-      args[name] = argv[i + 1];
+      args[name] = value;
     }
     i += 1;
   }
@@ -786,17 +790,20 @@ function buildDocument(blocks, args) {
       // not move the centered mark upward.
       const jointOrganizations = Array.isArray(args["joint-org"]) ? args["joint-org"].map((name) => String(name).trim()).filter(Boolean) : [];
       const agencyNames = [String(args.org).trim(), ...jointOrganizations];
-      // GB/T 9704-2012 7.2.4.2 keeps joint agency names on one centered
-      // mark row, with the host agency first. Full-width spaces preserve a
-      // visible separation without creating extra logo rows that would move
-      // the document number and title downward.
+      // GB/T 9704-2012 7.2.4 keeps joint agency names in order with the
+      // host first. When “文件” is present it sits to the right of the
+      // stacked names and is vertically centred against that name block.
       const host = String(args.org).trim();
+      const jointNames = jointOrganizations.length && host.endsWith("文件")
+        ? [host.slice(0, -2), ...jointOrganizations]
+        : agencyNames;
+      const middleIndex = Math.floor((jointNames.length - 1) / 2);
       const jointText = jointOrganizations.length && host.endsWith("文件")
-        ? [...[host.slice(0, -2), ...jointOrganizations], "文件"].join("　")
+        ? jointNames.map((name, index) => index === middleIndex ? `${name}　文件` : name).join("\n")
         : agencyNames.join("　");
       const agencyMarkSize = agencyNames.length > 1 ? (jointText.length > 16 ? "44" : "48") : "56";
-      body.push(floatingAgencyMarkParagraph(jointText, 1, agencyMarkSize));
-      body.push(agencyMarkFlowSpacer());
+      body.push(floatingAgencyMarkParagraph(jointText, jointOrganizations.length ? jointNames.length : 1, agencyMarkSize));
+      body.push(agencyMarkFlowSpacer(jointOrganizations.length ? Math.max(0, jointNames.length - 1) * 560 : 0));
       if (args["doc-no"]) body.push(...blankGridLines(2));
     }
     if (letterhead === "preprinted") {
@@ -1014,7 +1021,13 @@ function writeDocx(output, documentXml, pageNumberMode, format) {
   fs.rmSync(dir, { recursive: true, force: true });
 }
 
-const args = parseArgs(process.argv);
+let args;
+try {
+  args = parseArgs(process.argv);
+} catch (error) {
+  console.error(`GENERATOR ERROR: ${error.message}`);
+  process.exit(2);
+}
 if (args.help || !args.input || !args.output) {
   usage();
   process.exit(args.help ? 0 : 1);

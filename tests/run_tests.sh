@@ -130,7 +130,15 @@ unzip -p "$TMP_DIR/horizontal-table.docx" word/document.xml | grep -q 'w:tblW w:
 unzip -p "$TMP_DIR/joint.docx" word/document.xml | grep -q '主办机关'
 unzip -p "$TMP_DIR/joint.docx" word/document.xml | grep -q '协办机关'
 unzip -p "$TMP_DIR/joint.docx" word/document.xml | grep -q '文件'
+unzip -p "$TMP_DIR/joint.docx" word/document.xml | grep -q '主办机关　文件</w:t><w:br/>'
+unzip -p "$TMP_DIR/joint.docx" word/document.xml | grep -q '协办机关</w:t>'
 unzip -p "$TMP_DIR/joint.docx" word/document.xml | grep -q 'w:sz w:val="48"'
+
+if "$NODE" "$GEN" --input "$FIXTURE" --output "$TMP_DIR/missing-joint-name.docx" --format formal --letterhead digital --org "主办机关文件" --joint-org --doc-no "示例发〔2026〕4号" --title "缺少联署机关名称" >"$TMP_DIR/missing-joint-name.out" 2>&1; then
+  echo "missing joint agency name unexpectedly succeeded" >&2
+  exit 1
+fi
+grep -q 'GENERATOR ERROR: --joint-org requires a value' "$TMP_DIR/missing-joint-name.out"
 
 if "$NODE" "$GEN" --input "$FIXTURE" --output "$TMP_DIR/strict.docx" --format formal --letterhead digital --org "示例单位文件" --title "严格字体测试" --require-standard-fonts >"$TMP_DIR/strict.out" 2>&1; then
   if ! fc-list -f '%{family}\n' | grep -Eq '方正小标宋简体|方正小标宋_GBK|FZXiaoBiaoSong'; then

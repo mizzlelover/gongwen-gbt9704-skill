@@ -160,7 +160,7 @@
 | 预印红头纸套打 | 是 | `--format formal --letterhead preprinted`，按纸样设置预留高度 |
 | 完整电子红头 | 是 | `--format formal --letterhead digital` |
 | 印章、签名章 | 文字版式之外 | 在 Word/WPS 中插入图片或实体盖章 |
-| 联合行文 | 通过 `--joint-org` 同行生成，主办机关在前 | 复杂机关专用标志和联署模板复核 |
+| 联合行文 | 通过 `--joint-org` 分行生成，主办机关在前，“文件”置右并按联署名称上下居中 | 复杂机关专用标志和联署模板复核 |
 | 附件 | 通过 `--attachment-file` 另页生成标签、标题和正文；`--attachment-detached` 补排文号和附件序号 | 复杂附件版式仍需人工复核 |
 | 版记 | 是 | `--cc`、`--print-org`、`--print-date` 适用时生成 |
 | 信函、命令、纪要、横排表格 | 是/部分通过 | `--format letter|command|minutes|horizontal-table`，按实际字段生成；横排表头方向需模板复核 |
