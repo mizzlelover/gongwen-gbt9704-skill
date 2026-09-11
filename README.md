@@ -58,7 +58,7 @@ https://std.samr.gov.cn/gb/search/gbDetailed?id=lOIe27f77QU%3D&mode=p
 
 ## 最新更新
 
-新版将普通材料、预印红头纸套打和完整电子红头分开处理，并补入 Word/WPS 的四级标题样式。完整的更新说明、实测范围和配图见[这次更新说明](marketing/x-v2-release.md)。
+本次重大更新重新核验了红头场景、首页预留、红线下标题间距、Word/WPS 标题样式、目录引用、特殊格式和跨平台安装，并完成 18 份 DOCX、37 个 PNG 页面和版头坐标量测。完整的更新说明、过程配图和剩余边界见[重大更新说明](marketing/x-major-update.md)；上一版记录仍保留在[红头规则更新说明](marketing/x-v2-release.md)。
 
 ## 作者与同名内容 IP
 
