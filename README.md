@@ -97,7 +97,7 @@ node scripts/generate_gongwen_docx.mjs --input tests/fixture.md --output /tmp/go
 node scripts/verify_gongwen_docx.mjs --input /tmp/gongwen.docx --profile ordinary
 ```
 
-需要正式发文时，必须明确选择版式。下面的命令生成预印红头纸套打稿；首页只留出纸上已有红头和红线区域，DOCX 不会重绘它们。`72` 是默认预留高度，应按本单位实际红头纸改为 `37—130` 毫米。
+需要正式发文时，必须明确选择版式。下面的命令生成预印红头纸套打稿；首页只留出纸上已有红头和红线区域，DOCX 不会重绘它们。`--letterhead-reserve-mm` 表示纸张上边缘到预印机关标志区域起点的高度，生成器随后保留两行 28 磅版心空行再排变量文号，标题前再保留红线下两行空行。`72` 是默认值，应按本单位实际红头纸改为 `37—130` 毫米。
 
 ```bash
 node scripts/generate_gongwen_docx.mjs --input tests/fixture.md --output /tmp/formal.docx --format formal --letterhead preprinted --letterhead-reserve-mm 72 --org "示例单位文件" --doc-no "示例发〔2026〕1号" --title "公文格式回归测试"

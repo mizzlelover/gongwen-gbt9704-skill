@@ -826,6 +826,10 @@ function buildDocument(blocks, args) {
       // separator. Its reserve is a paper-coordinate boundary, so optional
       // copy/secret/urgency fields must not shorten it.
       body.push(letterheadReserveParagraph(reserve));
+      // The preprinted paper supplies the agency mark and separator. Keep the
+      // variable document number below the reserved mark block by preserving
+      // the same two 28-point grid lines used under a digital agency mark.
+      if (args["doc-no"]) body.push(...blankGridLines(2));
     }
     if (args["doc-no"]) args["doc-no"] = normalizeDocumentNumber(args["doc-no"]);
     if (upward && args["doc-no"] && args.signer) body.push(upwardHeaderParagraph(args["doc-no"], args.signer));
@@ -1044,6 +1048,15 @@ try {
 if (args.help || !args.input || !args.output) {
   usage();
   process.exit(args.help ? 0 : 1);
+}
+const supportedFormats = ["ordinary", "formal", "letter", "command", "minutes", "horizontal-table"];
+try {
+  if (args.format !== undefined && !supportedFormats.includes(args.format)) throw new Error(`--format must be one of ${supportedFormats.join(", ")}`);
+  if (args.letterhead !== undefined && !["preprinted", "digital"].includes(args.letterhead)) throw new Error("--letterhead must be preprinted or digital");
+  if (args["page-number"] !== undefined && !["center", "standard", "none"].includes(args["page-number"])) throw new Error("--page-number must be center, standard, or none");
+} catch (error) {
+  console.error(`GENERATOR ERROR: ${error.message}`);
+  process.exit(2);
 }
 try {
   reportFontStatus(args);

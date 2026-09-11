@@ -28,7 +28,7 @@ node scripts/generate_gongwen_docx.mjs --input source.md --output output.docx --
 普通材料使用 `--format ordinary`，默认居中页码，不绘制红头。正式发文须显式使用 `--format formal`；其默认 `--letterhead preprinted`，即首面预留红头纸区域、不在 DOCX 中重绘纸上已有的红色机关标志和红线。`--doc-no` 等本次需打印的黑色变量仍可保留。只有明确要求完整电子版时使用 `--letterhead digital`。完整电子红头的机关标志按标准推荐使用小标宋体，标题按标准使用小标宋体；生成器会在缺失时明确警告并记录实际替代字体，需要硬性阻止替代输出时加 `--require-standard-fonts`。红线下标题按28磅版心网格空二行。
 
 ```bash
-# 预印红头纸套打；72mm 是默认机关标志区域高度，可按实际纸样调为 37—130mm
+# 预印红头纸套打；72mm 是默认机关标志区域起点，可按实际纸样调为 37—130mm
 node scripts/generate_gongwen_docx.mjs --input source.md --output output.docx --format formal --letterhead preprinted --letterhead-reserve-mm 72 --org "发文机关名称" --doc-no "单位发〔2026〕1号" --title "文档标题" --sender "落款单位" --date "2026年9月9日"
 
 # 完整电子红头版，仅在明确要求时使用

@@ -26,6 +26,19 @@ unzip -p "$TMP_DIR/layout.docx" word/document.xml | grep -q 'w:pStyle w:val="Hea
 ! unzip -p "$TMP_DIR/standard.docx" word/document.xml | grep -q '示例单位文件'
 unzip -p "$TMP_DIR/standard.docx" word/document.xml | grep -q '示例发〔2026〕1号'
 unzip -p "$TMP_DIR/standard.docx" word/document.xml | grep -q 'w:snapToGrid w:val="false"'
+python3 - "$TMP_DIR/standard.docx" <<'PY'
+import re
+import sys
+import zipfile
+
+with zipfile.ZipFile(sys.argv[1]) as archive:
+    xml = archive.read("word/document.xml").decode()
+paragraphs = re.findall(r'<w:p>[\s\S]*?</w:p>', xml)
+doc_no_index = next(i for i, paragraph in enumerate(paragraphs) if '示例发〔2026〕1号' in paragraph)
+gap = paragraphs[doc_no_index - 2:doc_no_index]
+assert len(gap) == 2
+assert all('w:line="560"' in paragraph and 'w:lineRule="exact"' in paragraph and 'w:snapToGrid w:val="false"' in paragraph for paragraph in gap)
+PY
 
 "$NODE" "$GEN" --input "$FIXTURE" --output "$TMP_DIR/digital.docx" --format formal --letterhead digital --org "示例单位文件" --doc-no "示例发〔2026〕1号" --title "电子红头测试" --page-number standard
 "$NODE" "$VERIFY" --input "$TMP_DIR/digital.docx" --profile formal --letterhead digital
@@ -83,6 +96,15 @@ if "$NODE" "$GEN" --input "$FIXTURE" --output "$TMP_DIR/bad-attachment.docx" --f
   exit 1
 fi
 grep -q 'GENERATOR ERROR:' "$TMP_DIR/bad-attachment.out"
+
+for bad_option in format letterhead page-number; do
+  output="$TMP_DIR/invalid-$bad_option.out"
+  if "$NODE" "$GEN" --input "$FIXTURE" --output "$TMP_DIR/invalid-$bad_option.docx" --format ordinary --"$bad_option" "invalid-value" >"$output" 2>&1; then
+    echo "invalid --$bad_option unexpectedly succeeded" >&2
+    exit 1
+  fi
+  grep -q -- "--$bad_option" "$output"
+done
 
 "$NODE" "$GEN" --input "$FIXTURE" --output "$TMP_DIR/command.docx" --format command --org "示例机关命令" --doc-no "第1号" --title "命令正文"
 "$NODE" "$VERIFY" --input "$TMP_DIR/command.docx" --profile command

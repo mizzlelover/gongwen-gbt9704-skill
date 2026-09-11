@@ -170,6 +170,9 @@ if (profile === "formal") {
     const titleXmlStart = firstTitleIndex < 0 ? doc.length : doc.indexOf(preprintedParagraphs[firstTitleIndex]);
     const preprintedHeaderXml = titleXmlStart < 0 ? doc : doc.slice(0, titleXmlStart);
     check("No red drawing for preprinted letterhead", !/w:color w:val="FF0000"/.test(preprintedHeaderXml), "preprinted mode does not redraw red letterhead or rule");
+    const preprintedDocNoIndex = preprintedParagraphs.findIndex((p) => /〔\d{4}〕[1-9]\d*号/.test(textOf(p)));
+    const preprintedDocNoGap = preprintedDocNoIndex >= 0 ? preprintedParagraphs.slice(0, preprintedDocNoIndex).slice(-2) : [];
+    check("Preprinted agency-to-document number two blank lines", preprintedDocNoIndex < 0 || (preprintedDocNoGap.length === 2 && preprintedDocNoGap.every(isExplicitBlankGridLine)), "document number starts below the reserved physical agency mark block");
     check("Title spacing below physical red rule", hasExplicitTwoLineTitleGap, "title is preceded by two exact 28-point blank paragraphs below the printed red rule");
   }
 }
