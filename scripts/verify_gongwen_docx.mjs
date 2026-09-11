@@ -165,7 +165,8 @@ if (profile === "formal") {
       check("Upward document number and signer share one row", paragraphs(doc).some((p) => /签发人：/.test(textOf(p)) && /〔|\[|文号|发/.test(textOf(p))), "signer is in the same paragraph row as the document number");
     }
   } else {
-    check("Preprinted letterhead reserve", /w:before="\d{4,}"/.test(doc), "first-page top reserve is present");
+    const preprintedReserveParagraph = /w:line="1" w:lineRule="exact"[\s\S]*?w:snapToGrid w:val="false"[\s\S]*?w:sz w:val="2"/.test(doc);
+    check("Preprinted letterhead reserve", preprintedReserveParagraph, "first-page top reserve is present");
     const preprintedParagraphs = paragraphs(doc);
     const titleXmlStart = firstTitleIndex < 0 ? doc.length : doc.indexOf(preprintedParagraphs[firstTitleIndex]);
     const preprintedHeaderXml = titleXmlStart < 0 ? doc : doc.slice(0, titleXmlStart);

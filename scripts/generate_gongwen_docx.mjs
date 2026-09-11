@@ -10,6 +10,9 @@ const MARGIN = { top: 2098, bottom: 1984, left: 1588, right: 1474 };
 const CONTENT_W = PAGE_W - MARGIN.left - MARGIN.right;
 const FIRST_LINE_INDENT = 640;
 const ONE_CHAR_INDENT = FIRST_LINE_INDENT / 2;
+// Four 3号 Chinese characters equal 1280 dxa; GB/T 9704-2012 7.3.5.1/7.3.5.3
+// uses this right indent for the signed/sealed date position.
+const FOUR_CHAR_RIGHT_INDENT = FIRST_LINE_INDENT * 2;
 // First-page red-head frames use the type-area top as their vertical anchor.
 // GB/T 9704-2012 7.2.1-7.2.4 then become direct coordinates: the first
 // header line is y=0 and the agency mark begins 35 mm below it. Keeping the
@@ -494,15 +497,15 @@ function estimatedTextWidthDxa(text) {
 function signatureParagraphs(args) {
   if (args["seal-mode"] === "signed") {
     if (!args.signer || !args["signer-title"]) throw new Error("signed seal mode requires --signer and --signer-title");
-    const lines = [rightWithIndent(`${args["signer-title"]}  ${args.signer}`, FIRST_LINE_INDENT * 2)];
-    if (args.date) lines.push(...blankGridLines(1), rightWithIndent(args.date, FIRST_LINE_INDENT * 2));
+    const lines = [rightWithIndent(`${args["signer-title"]}  ${args.signer}`, FOUR_CHAR_RIGHT_INDENT)];
+    if (args.date) lines.push(...blankGridLines(1), rightWithIndent(args.date, FOUR_CHAR_RIGHT_INDENT));
     return lines;
   }
   if (args["seal-mode"] === "seal") {
     if (!args.sender && !args.date) return [];
     const lines = [];
-    if (args.sender) lines.push(rightWithIndent(args.sender, FIRST_LINE_INDENT * 2));
-    if (args.date) lines.push(rightWithIndent(args.date, FIRST_LINE_INDENT * 2));
+    if (args.sender) lines.push(rightWithIndent(args.sender, FOUR_CHAR_RIGHT_INDENT));
+    if (args.date) lines.push(rightWithIndent(args.date, FOUR_CHAR_RIGHT_INDENT));
     return lines;
   }
   if (!args.sender && !args.date) return [];

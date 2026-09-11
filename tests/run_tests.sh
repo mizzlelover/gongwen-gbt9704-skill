@@ -40,6 +40,9 @@ assert len(gap) == 2
 assert all('w:line="560"' in paragraph and 'w:lineRule="exact"' in paragraph and 'w:snapToGrid w:val="false"' in paragraph for paragraph in gap)
 PY
 
+"$NODE" "$GEN" --input "$FIXTURE" --output "$TMP_DIR/preprinted-minimum.docx" --format formal --letterhead preprinted --letterhead-reserve-mm 37 --doc-no "示例发〔2026〕7号" --title "最小预印留白测试"
+"$NODE" "$VERIFY" --input "$TMP_DIR/preprinted-minimum.docx" --profile formal --letterhead preprinted
+
 "$NODE" "$GEN" --input "$FIXTURE" --output "$TMP_DIR/digital.docx" --format formal --letterhead digital --org "示例单位文件" --doc-no "示例发〔2026〕1号" --title "电子红头测试" --page-number standard
 "$NODE" "$VERIFY" --input "$TMP_DIR/digital.docx" --profile formal --letterhead digital
 unzip -p "$TMP_DIR/digital.docx" word/document.xml | grep -q '示例单位文件'
@@ -123,7 +126,34 @@ test "${minutes_xml%%w:sectPr*}" != "$minutes_xml"
 test "${minutes_xml%%出席：*}" != "${minutes_xml%%w:sectPr*}"
 
 "$NODE" "$GEN" --input "$FIXTURE" --output "$TMP_DIR/seal-layout.docx" --format formal --letterhead preprinted --letterhead-reserve-mm 72 --title "签章位置测试" --sender "示例机关" --date "2026年9月10日" --seal-mode seal
-unzip -p "$TMP_DIR/seal-layout.docx" word/document.xml | grep -q 'w:right="1280"'
+python3 - "$TMP_DIR/seal-layout.docx" <<'PY'
+import sys, zipfile
+from xml.etree import ElementTree as ET
+ns={'w':'http://schemas.openxmlformats.org/wordprocessingml/2006/main'}
+with zipfile.ZipFile(sys.argv[1]) as z:
+    root=ET.fromstring(z.read('word/document.xml'))
+for p in root.findall('.//w:p', ns):
+    if ''.join(p.itertext()).strip() == '2026年9月10日':
+        assert p.find('./w:pPr/w:ind', ns).attrib['{http://schemas.openxmlformats.org/wordprocessingml/2006/main}right'] == '1280'
+        break
+else:
+    raise SystemExit('seal date paragraph with four-character right indent not found')
+PY
+
+"$NODE" "$GEN" --input "$FIXTURE" --output "$TMP_DIR/signed-layout.docx" --format formal --letterhead preprinted --letterhead-reserve-mm 72 --title "签名章位置测试" --date "2026年9月10日" --seal-mode signed --signer-title "主要负责人" --signer "张三"
+python3 - "$TMP_DIR/signed-layout.docx" <<'PY'
+import sys, zipfile
+from xml.etree import ElementTree as ET
+ns={'w':'http://schemas.openxmlformats.org/wordprocessingml/2006/main'}
+with zipfile.ZipFile(sys.argv[1]) as z:
+    root=ET.fromstring(z.read('word/document.xml'))
+for p in root.findall('.//w:p', ns):
+    if ''.join(p.itertext()).strip() == '2026年9月10日':
+        assert p.find('./w:pPr/w:ind', ns).attrib['{http://schemas.openxmlformats.org/wordprocessingml/2006/main}right'] == '1280'
+        break
+else:
+    raise SystemExit('signed date paragraph with four-character right indent not found')
+PY
 
 if "$NODE" "$GEN" --input "$FIXTURE" --output "$TMP_DIR/bad-doc-no.docx" --format formal --letterhead digital --org "示例单位文件" --doc-no "示例发〔2026〕01号" --title "非法文号" >"$TMP_DIR/bad-doc-no.out" 2>&1; then
   echo "invalid document number unexpectedly succeeded" >&2
