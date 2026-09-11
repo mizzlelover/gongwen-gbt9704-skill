@@ -60,6 +60,8 @@ https://std.samr.gov.cn/gb/search/gbDetailed?id=lOIe27f77QU%3D&mode=p
 
 2.0 重新核验了红头场景、首页预留、红线下标题间距、Word/WPS 标题样式、目录引用、特殊格式和跨平台安装，并完成 18 份 DOCX、37 个 PNG 页面和版头坐标量测。完整的更新说明见[2.0 重大更新文章](marketing/x-major-update.md)；文章、4 张新版插图和实际验证截图的合稿预览见[2.0 图文排版预览](marketing/x-major-update-layout-preview.md)。上一版记录仍保留在[红头规则更新说明](marketing/x-v2-release.md)。
 
+公众号发布可直接使用[2.0 公众号 HTML](marketing/wechat-gongwen-2.0.html)：在浏览器打开后全选复制，再粘贴到公众号编辑器。
+
 ## 作者与同名内容 IP
 
 这个项目由“谁是专家”持续维护。相关内容会记录 AI 工具、公文排版、正式材料和实际使用中的问题，欢迎从下面的入口找到我。
