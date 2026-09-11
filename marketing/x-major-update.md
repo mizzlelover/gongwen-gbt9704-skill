@@ -1,5 +1,7 @@
 # 一条贴着标题的红线，让我把公文 Skill 重做了一遍
 
+> Gongwen Skill 2.0 重大更新
+
 ![Gongwen Skill 新版头图](../punk-assets/punk-cover/gongwen-redline-x/cover.png)
 
 上一篇刚把 Gongwen Skill 介绍出去，我自己用着用着，又发现了问题。

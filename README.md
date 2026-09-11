@@ -56,9 +56,9 @@ https://github.com/mizzlelover/gongwen-gbt9704-skill
 
 https://std.samr.gov.cn/gb/search/gbDetailed?id=lOIe27f77QU%3D&mode=p
 
-## 最新更新
+## 2.0 重大更新
 
-本次重大更新重新核验了红头场景、首页预留、红线下标题间距、Word/WPS 标题样式、目录引用、特殊格式和跨平台安装，并完成 18 份 DOCX、37 个 PNG 页面和版头坐标量测。完整的更新说明、过程配图和剩余边界见[重大更新说明](marketing/x-major-update.md)；上一版记录仍保留在[红头规则更新说明](marketing/x-v2-release.md)。
+2.0 重新核验了红头场景、首页预留、红线下标题间距、Word/WPS 标题样式、目录引用、特殊格式和跨平台安装，并完成 18 份 DOCX、37 个 PNG 页面和版头坐标量测。完整的更新说明见[2.0 重大更新文章](marketing/x-major-update.md)；文章、4 张新版插图和实际验证截图的合稿预览见[2.0 图文排版预览](marketing/x-major-update-layout-preview.md)。上一版记录仍保留在[红头规则更新说明](marketing/x-v2-release.md)。
 
 ## 作者与同名内容 IP
 
