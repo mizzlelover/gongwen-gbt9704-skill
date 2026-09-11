@@ -42,6 +42,25 @@ PY
 
 "$NODE" "$GEN" --input "$FIXTURE" --output "$TMP_DIR/preprinted-minimum.docx" --format formal --letterhead preprinted --letterhead-reserve-mm 37 --doc-no "示例发〔2026〕7号" --title "最小预印留白测试"
 "$NODE" "$VERIFY" --input "$TMP_DIR/preprinted-minimum.docx" --profile formal --letterhead preprinted
+python3 - "$TMP_DIR/preprinted-minimum.docx" "$TMP_DIR/preprinted-malformed.docx" <<'PY'
+import sys, zipfile
+source, target = sys.argv[1:]
+with zipfile.ZipFile(source) as src, zipfile.ZipFile(target, 'w', zipfile.ZIP_DEFLATED) as dst:
+    for item in src.infolist():
+        data = src.read(item.filename)
+        if item.filename == 'word/document.xml':
+            text = data.decode()
+            old = '<w:spacing w:before="0" w:after="0" w:line="1" w:lineRule="exact"/>'
+            assert text.count(old) == 1
+            text = text.replace(old, '<w:spacing w:before="0" w:after="0" w:line="560" w:lineRule="exact"/>', 1)
+            data = text.encode()
+        dst.writestr(item, data)
+PY
+if "$NODE" "$VERIFY" --input "$TMP_DIR/preprinted-malformed.docx" --profile formal >"$TMP_DIR/preprinted-malformed.out" 2>&1; then
+  echo "malformed preprinted reserve unexpectedly passed" >&2
+  exit 1
+fi
+grep -q 'Preprinted letterhead reserve' "$TMP_DIR/preprinted-malformed.out"
 
 "$NODE" "$GEN" --input "$FIXTURE" --output "$TMP_DIR/digital.docx" --format formal --letterhead digital --org "示例单位文件" --doc-no "示例发〔2026〕1号" --title "电子红头测试" --page-number standard
 "$NODE" "$VERIFY" --input "$TMP_DIR/digital.docx" --profile formal --letterhead digital

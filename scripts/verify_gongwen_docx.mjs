@@ -165,9 +165,23 @@ if (profile === "formal") {
       check("Upward document number and signer share one row", paragraphs(doc).some((p) => /签发人：/.test(textOf(p)) && /〔|\[|文号|发/.test(textOf(p))), "signer is in the same paragraph row as the document number");
     }
   } else {
-    const preprintedReserveParagraph = /w:line="1" w:lineRule="exact"[\s\S]*?w:snapToGrid w:val="false"[\s\S]*?w:sz w:val="2"/.test(doc);
-    check("Preprinted letterhead reserve", preprintedReserveParagraph, "first-page top reserve is present");
     const preprintedParagraphs = paragraphs(doc);
+    const reserveCandidate = (p) => /w:jc w:val="left"/.test(p)
+      && /w:line="1"/.test(p)
+      && /w:lineRule="exact"/.test(p)
+      && /w:snapToGrid w:val="false"/.test(p)
+      && /w:sz w:val="2"/.test(p)
+      && /<w:t[^>]*> <\/w:t>/.test(p);
+    const reserveIndex = preprintedParagraphs.findIndex(reserveCandidate);
+    const reserveParagraph = reserveIndex >= 0 ? preprintedParagraphs[reserveIndex] : "";
+    const reserveSpacing = reserveParagraph.match(/<w:spacing\b[^>]*>/)?.[0] ?? "";
+    const reserveBefore = Number((reserveSpacing.match(/w:before="(\d+)"/) ?? [])[1]);
+    const reserveBeforeInRange = Number.isFinite(reserveBefore) && reserveBefore >= 0 && reserveBefore <= Math.round((130 - 37) * 56.692913);
+    const priorParagraphsAreFloating = reserveIndex >= 0 && preprintedParagraphs.slice(0, reserveIndex).every((p) => /w:framePr\b/.test(p));
+    const preprintedReserveParagraph = reserveIndex >= 0
+      && priorParagraphsAreFloating
+      && reserveBeforeInRange;
+    check("Preprinted letterhead reserve", preprintedReserveParagraph, "first non-floating body paragraph reserves 37-130 mm paper-top agency-mark space");
     const titleXmlStart = firstTitleIndex < 0 ? doc.length : doc.indexOf(preprintedParagraphs[firstTitleIndex]);
     const preprintedHeaderXml = titleXmlStart < 0 ? doc : doc.slice(0, titleXmlStart);
     check("No red drawing for preprinted letterhead", !/w:color w:val="FF0000"/.test(preprintedHeaderXml), "preprinted mode does not redraw red letterhead or rule");
