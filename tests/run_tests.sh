@@ -130,9 +130,41 @@ unzip -p "$TMP_DIR/horizontal-table.docx" word/document.xml | grep -q 'w:tblW w:
 unzip -p "$TMP_DIR/joint.docx" word/document.xml | grep -q '主办机关'
 unzip -p "$TMP_DIR/joint.docx" word/document.xml | grep -q '协办机关'
 unzip -p "$TMP_DIR/joint.docx" word/document.xml | grep -q '文件'
-unzip -p "$TMP_DIR/joint.docx" word/document.xml | grep -q '主办机关　文件</w:t><w:br/>'
-unzip -p "$TMP_DIR/joint.docx" word/document.xml | grep -q '协办机关</w:t>'
 unzip -p "$TMP_DIR/joint.docx" word/document.xml | grep -q 'w:sz w:val="48"'
+
+"$NODE" "$GEN" --input "$FIXTURE" --output "$TMP_DIR/joint-four-agencies.docx" --format formal --letterhead digital --org "主办机关文件" --joint-org "协办机关一" --joint-org "协办机关二" --joint-org "协办机关三" --doc-no "示例发〔2026〕4号" --title "四机关联合行文测试"
+"$NODE" "$VERIFY" --input "$TMP_DIR/joint-four-agencies.docx" --profile formal --letterhead digital
+"$NODE" "$GEN" --input "$FIXTURE" --output "$TMP_DIR/joint-without-file-suffix.docx" --format formal --letterhead digital --org "主办机关" --joint-org "协办机关" --doc-no "示例发〔2026〕5号" --title "无文件后缀联合行文测试"
+"$NODE" "$VERIFY" --input "$TMP_DIR/joint-without-file-suffix.docx" --profile formal --letterhead digital
+python3 - "$TMP_DIR/joint.docx" "$TMP_DIR/joint-four-agencies.docx" <<'PY'
+import re
+import sys
+import zipfile
+
+for filename, expected_count in ((sys.argv[1], 2), (sys.argv[2], 4)):
+    with zipfile.ZipFile(filename) as archive:
+        xml = archive.read("word/document.xml").decode()
+    tables = re.findall(r'<w:tbl>[\s\S]*?<w:tblpPr[^>]*w:tblpY="1984"[\s\S]*?</w:tbl>', xml)
+    assert len(tables) == 1, filename
+    table = tables[0]
+    assert table.count('<w:vAlign w:val="center"/>') >= 2, filename
+    assert table.count('<w:tc>') == 2, filename
+    assert table.count('<w:p>') == expected_count + 1, filename
+    assert '<w:t xml:space="preserve">文件</w:t>' in table, filename
+PY
+python3 - "$TMP_DIR/joint-without-file-suffix.docx" <<'PY'
+import re
+import sys
+import zipfile
+
+with zipfile.ZipFile(sys.argv[1]) as archive:
+    xml = archive.read("word/document.xml").decode()
+tables = re.findall(r'<w:tbl>[\s\S]*?<w:tblpPr[^>]*w:tblpY="1984"[\s\S]*?</w:tbl>', xml)
+assert len(tables) == 1
+table = tables[0]
+assert table.count('<w:vAlign w:val="center"/>') >= 1
+assert '<w:t xml:space="preserve">文件</w:t>' not in table
+PY
 
 if "$NODE" "$GEN" --input "$FIXTURE" --output "$TMP_DIR/missing-joint-name.docx" --format formal --letterhead digital --org "主办机关文件" --joint-org --doc-no "示例发〔2026〕4号" --title "缺少联署机关名称" >"$TMP_DIR/missing-joint-name.out" 2>&1; then
   echo "missing joint agency name unexpectedly succeeded" >&2

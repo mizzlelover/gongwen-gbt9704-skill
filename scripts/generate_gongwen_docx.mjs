@@ -240,6 +240,22 @@ function floatingAgencyMarkParagraph(text, lineCount = 1, size = "56") {
   });
 }
 
+function floatingJointAgencyTable(names, size = "48", includeFile = true) {
+  const maxNameLength = Math.max(...names.map((name) => [...name].length), 1);
+  const rightWidth = includeFile ? 1600 : 0;
+  const leftWidth = Math.min(CONTENT_W - rightWidth, Math.max(3600, maxNameLength * 520 + 400));
+  const tableWidth = leftWidth + rightWidth;
+  const cellMargins = '<w:tcMar><w:top w:w="0" w:type="dxa"/><w:left w:w="0" w:type="dxa"/><w:bottom w:w="0" w:type="dxa"/><w:right w:w="0" w:type="dxa"/></w:tcMar>';
+  const lineParagraph = (text) => `<w:p><w:pPr><w:jc w:val="center"/><w:spacing w:before="0" w:after="0" w:line="560" w:lineRule="exact"/><w:snapToGrid w:val="true"/><w:kinsoku w:val="true"/></w:pPr>${run(text, { fontPreset: "title", size, color: "FF0000" })}</w:p>`;
+  const leftCell = `<w:tc><w:tcPr><w:tcW w:w="${leftWidth}" w:type="dxa"/><w:vAlign w:val="center"/>${cellMargins}</w:tcPr>${names.map(lineParagraph).join("")}</w:tc>`;
+  const rightCell = includeFile
+    ? `<w:tc><w:tcPr><w:tcW w:w="${rightWidth}" w:type="dxa"/><w:vAlign w:val="center"/>${cellMargins}</w:tcPr>${lineParagraph("文件")}</w:tc>`
+    : "";
+  const tablePr = `<w:tblPr><w:tblpPr w:leftFromText="0" w:rightFromText="0" w:topFromText="0" w:bottomFromText="0" w:vertAnchor="margin" w:horzAnchor="margin" w:tblpXSpec="center" w:tblpY="${AGENCY_FRAME_Y}"/><w:tblOverlap w:val="never"/><w:tblW w:w="${tableWidth}" w:type="dxa"/><w:tblLayout w:type="fixed"/><w:tblBorders><w:top w:val="nil"/><w:left w:val="nil"/><w:bottom w:val="nil"/><w:right w:val="nil"/><w:insideH w:val="nil"/><w:insideV w:val="nil"/></w:tblBorders><w:tblCellMar><w:top w:w="0" w:type="dxa"/><w:left w:w="0" w:type="dxa"/><w:bottom w:w="0" w:type="dxa"/><w:right w:w="0" w:type="dxa"/></w:tblCellMar></w:tblPr>`;
+  const grid = `<w:gridCol w:w="${leftWidth}"/>${includeFile ? `<w:gridCol w:w="${rightWidth}"/>` : ""}`;
+  return `<w:tbl>${tablePr}<w:tblGrid>${grid}</w:tblGrid><w:tr><w:trPr><w:cantSplit/></w:trPr>${leftCell}${rightCell}</w:tr></w:tbl>`;
+}
+
 function agencyMarkFlowSpacer(extraDxa = 0) {
   return paragraph("\u00a0", {
     align: "left",
@@ -797,12 +813,9 @@ function buildDocument(blocks, args) {
       const jointNames = jointOrganizations.length && host.endsWith("文件")
         ? [host.slice(0, -2), ...jointOrganizations]
         : agencyNames;
-      const middleIndex = Math.floor((jointNames.length - 1) / 2);
-      const jointText = jointOrganizations.length && host.endsWith("文件")
-        ? jointNames.map((name, index) => index === middleIndex ? `${name}　文件` : name).join("\n")
-        : agencyNames.join("　");
-      const agencyMarkSize = agencyNames.length > 1 ? (jointText.length > 16 ? "44" : "48") : "56";
-      body.push(floatingAgencyMarkParagraph(jointText, jointOrganizations.length ? jointNames.length : 1, agencyMarkSize));
+      const agencyMarkSize = agencyNames.length > 1 ? (Math.max(...jointNames.map((name) => [...name].length)) > 10 ? "44" : "48") : "56";
+      if (jointOrganizations.length) body.push(floatingJointAgencyTable(jointNames, agencyMarkSize, host.endsWith("文件")));
+      else body.push(floatingAgencyMarkParagraph(agencyNames.join("　"), 1, agencyMarkSize));
       body.push(agencyMarkFlowSpacer(jointOrganizations.length ? Math.max(0, jointNames.length - 1) * 560 : 0));
       if (args["doc-no"]) body.push(...blankGridLines(2));
     }

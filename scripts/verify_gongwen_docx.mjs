@@ -133,17 +133,29 @@ if (profile === "formal") {
     check("Red rule width", /style="width:156mm;height:0\.5mm"/.test(doc), "header separator spans the 156 mm type area");
     const docParagraphs = paragraphs(doc);
     const agencyIndex = docParagraphs.findIndex((p) => /w:sz w:val="(?:56|48|44)"/.test(p) && /w:color w:val="FF0000"/.test(p));
+    const jointAgencyTable = doc.match(/<w:tbl>[\s\S]*?<w:tblpPr[^>]*w:vertAnchor="margin"[^>]*w:horzAnchor="margin"[^>]*w:tblpXSpec="center"[^>]*w:tblpY="1984"[\s\S]*?<\/w:tbl>/)?.[0] ?? "";
     // Keep this expected value independent from the generator's calibration
     // constants. It is 35 mm in twentieths of a point, as required by 7.2.4.
     const agencyOffsetFromTypeAreaTop = Math.round(35 * 56.692913);
-    check("Digital red-head agency position", agencyIndex >= 0 && new RegExp(`w:framePr[^>]*w:hAnchor="margin"[^>]*w:vAnchor="margin"[^>]*w:xAlign="center"[^>]*w:y="${agencyOffsetFromTypeAreaTop}"`).test(docParagraphs[agencyIndex]) && /w:before="0"/.test(docParagraphs[agencyIndex]), "agency mark is independently fixed 35 mm below the type-area top");
+    const agencyFrameOk = agencyIndex >= 0
+      && new RegExp(`w:framePr[^>]*w:hAnchor="margin"[^>]*w:vAnchor="margin"[^>]*w:xAlign="center"[^>]*w:y="${agencyOffsetFromTypeAreaTop}"`).test(docParagraphs[agencyIndex])
+      && /w:before="0"/.test(docParagraphs[agencyIndex]);
+    const jointAgencyFrameOk = Boolean(jointAgencyTable) && new RegExp(`w:tblpY="${agencyOffsetFromTypeAreaTop}"`).test(jointAgencyTable);
+    check("Digital red-head agency position", agencyFrameOk || jointAgencyFrameOk, "agency mark is independently fixed 35 mm below the type-area top");
+    if (jointAgencyTable) {
+      const jointRows = (jointAgencyTable.match(/<w:p>/g) ?? []).length;
+      const hasFileCell = /<w:t[^>]*>文件<\/w:t>/.test(jointAgencyTable);
+      const centeredCells = (jointAgencyTable.match(/w:vAlign w:val="center"/g) ?? []).length;
+      check("Joint agency vertical layout", jointRows >= 2 && centeredCells >= (hasFileCell ? 2 : 1) && /w:color w:val="FF0000"/.test(jointAgencyTable), hasFileCell ? "joint names are stacked and 文件 is vertically centered in a right-side cell" : "joint names are stacked and vertically centered");
+    }
     const fixedHeaderFrames = docParagraphs
       .filter((p) => /w:framePr[^>]*w:hAnchor="margin"[^>]*w:vAnchor="margin"/.test(p))
       .map((p) => Number((p.match(/w:y="(\d+)"/) ?? [])[1]))
       .filter((value) => Number.isFinite(value));
     check("Digital red-head field frames", fixedHeaderFrames.every((value, index) => value === index * 560 || value === agencyOffsetFromTypeAreaTop), "left-corner fields use first-line grid positions without changing the agency mark anchor");
     const docNoIndex = docParagraphs.findIndex((p) => /〔\d{4}〕[1-9]\d*号/.test(textOf(p)));
-    const agencyToDocNo = agencyIndex >= 0 && docNoIndex > agencyIndex ? docParagraphs.slice(agencyIndex + 1, docNoIndex) : [];
+    const agencyBoundary = agencyIndex >= 0 ? agencyIndex + 1 : jointAgencyTable ? 0 : -1;
+    const agencyToDocNo = agencyBoundary >= 0 && docNoIndex > agencyBoundary ? docParagraphs.slice(agencyBoundary, docNoIndex) : [];
     const agencyFlowSpacer = agencyToDocNo.filter((p) => /w:before="[1-9]\d*"/.test(p) && /w:snapToGrid w:val="false"/.test(p));
     const agencyGapLines = agencyToDocNo.slice(-2);
     check("Agency mark to document number two blank lines", docNoIndex < 0 || (agencyFlowSpacer.length === 1 && agencyGapLines.length === 2 && agencyGapLines.every(isExplicitBlankGridLine)), "document number follows the fixed agency mark with two exact 28-point grid lines");
