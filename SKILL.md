@@ -2,9 +2,9 @@
 name: gongwen
 display_name: 公文排版
 display_name_en: Gongwen Document Formatting
-description: 将中文正式材料生成参照 GB/T 9704-2012 的公文版式 DOCX，支持机构名称、文号、正文、署名、日期和居中或单双页页码，并提供可选格式检查。
-description_zh: 按 GB/T 9704-2012 生成和核验中文正式材料的 DOCX 公文版式。
-description_en: Generate and verify Chinese official-document DOCX layouts based on GB/T 9704-2012.
+description: 把中文正式材料整理成可直接交付的公文 DOCX：按 GB/T 9704-2012 处理版心、字体、标题层级、文号、页码、附件与版记；普通稿不误用红头，正式发文支持预印红头纸套打或完整电子红头，并保留 Word/WPS 可更新目录。
+description_zh: 按 GB/T 9704-2012 将中文正式材料整理为可直接交付的公文 DOCX，覆盖版心、字体、标题层级、文号、页码、附件、版记及预印红头纸套打，并保留 Word/WPS 可更新目录。
+description_en: Generate Chinese official DOCX under GB/T 9704-2012 with page layout, typography, headings, document numbers, page numbers, attachments, colophon, preprinted letterhead, and Word/WPS TOC support.
 version: 2.0.0
 author: 谁是专家
 ---
