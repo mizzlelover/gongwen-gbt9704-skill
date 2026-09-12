@@ -15,6 +15,8 @@
 | ZCode | `~/.zcode/skills/gongwen` | 设置 → Skills 刷新并确认启用 |
 | TraeWork | 导入 `dist/traework-gongwen-skill.zip` | 导入后在企业技能列表确认启用 |
 
+腾讯 WorkBuddy 开放平台上传使用 `dist/workbuddy-gongwen-skill-v2.0.0.zip`。压缩包内是 `gongwen/SKILL.md` 及其脚本、参考资料和代表性核验资产，上传前无需解压；当前包约 1.2 MB，符合平台 3 MB 上传限制。
+
 ## macOS 与 Linux
 
 ```bash

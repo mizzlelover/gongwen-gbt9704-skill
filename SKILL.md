@@ -1,6 +1,12 @@
 ---
 name: gongwen
+display_name: Gongwen 公文排版
+display_name_en: Gongwen Document Formatting
 description: 将中文正式材料生成参照 GB/T 9704-2012 的公文版式 DOCX，支持机构名称、文号、正文、署名、日期和居中或单双页页码，并提供可选格式检查。
+description_zh: 按 GB/T 9704-2012 生成和核验中文正式材料的 DOCX 公文版式。
+description_en: Generate and verify Chinese official-document DOCX layouts based on GB/T 9704-2012.
+version: 2.0.0
+author: 谁是专家
 ---
 
 # 公文版式工具
