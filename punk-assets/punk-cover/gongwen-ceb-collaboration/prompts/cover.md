@@ -14,7 +14,7 @@ The cover uses the selected visual style: 品牌协同连接 / brand-collaborati
 - Title hierarchy:
   - A-layer / main visual title: 公文排版 × CEB
   - B-layer / complete meaning: 从旧格式读取，到规范排版
-- C-layer / small text: DOCX · GB/T 9704-2012  ↔  PDF · Markdown · TXT
+  - C-layer / small text: DOCX · GB/T 9704-2012  ↔  PDF · Markdown · TXT
   - Place “PDF · Markdown · TXT” under the left CEB icon; place “DOCX · GB/T 9704-2012” under the right Gongwen icon.
 - Platform: GitHub README
 - Aspect ratio: 5:2
