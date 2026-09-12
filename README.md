@@ -128,7 +128,7 @@ Windows：
 
 安装器将同一份源目录链接到各平台的用户级技能目录；Windows 默认复制以避免符号链接权限问题。TraeWork 使用可导入包 [`dist/traework-gongwen-skill.zip`](dist/traework-gongwen-skill.zip)。完整目录、验证方法和官方依据见[跨平台安装说明](docs/platform-support.md)。
 
-腾讯 WorkBuddy 开放平台上传使用 [`dist/workbuddy-gongwen-skill-v2.0.0.zip`](dist/workbuddy-gongwen-skill-v2.0.0.zip)。该包采用 `gongwen/SKILL.md` 目录结构，当前大小约 1.2 MB，低于平台 3 MB 限制。
+腾讯 WorkBuddy 开放平台上传使用 [`dist/workbuddy-gongwen-skill-v2.0.0.zip`](dist/workbuddy-gongwen-skill-v2.0.0.zip)。该包在 ZIP 根目录直接提供 `SKILL.md`，资源使用一级 `scripts/`、`references/` 和 `assets/` 目录，当前大小约 1.2 MB，低于平台 3 MB 限制。
 
 ## 项目内容
 
